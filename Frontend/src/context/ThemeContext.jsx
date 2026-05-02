@@ -57,7 +57,7 @@ const lightTheme = {
 export const ThemeProvider = ({ children }) => {
   const [theme, setTheme] = useState(() => {
     const saved = localStorage.getItem('mediguard-theme');
-    return saved === 'light' ? lightTheme : darkTheme;
+    return saved === 'dark' ? darkTheme : lightTheme;
   });
 
   useEffect(() => {

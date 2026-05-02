@@ -54,7 +54,7 @@ const BatchVerify = () => {
   const StatusIcon = config?.icon;
 
   return (
-    <div className="min-h-screen bg-bg-primary">
+    <div className="bg-bg-primary py-12" id="batch-verify-section">
       {/* Header */}
       <div className="py-12 bg-gradient-to-br from-bg-secondary to-bg-primary border-b border-border-color">
         <div className="max-w-4xl mx-auto px-4 text-center space-y-2">

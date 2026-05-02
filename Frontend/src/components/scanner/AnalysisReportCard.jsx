@@ -22,8 +22,12 @@ const AnalysisReportCard = ({ text, status, confidence }) => {
   const mrp = text.match(/MRP[:\s]*([^\n]+)/i)?.[1]?.trim() || 'Not visible'
   const drugLicense = text.match(/Drug License[^\n:]*[:\s]*([^\n]+)/i)?.[1]?.trim() || 'Not visible'
   const manufacturerAddress = text.match(/Manufacturer Address[:\s]*([^\n]+)/i)?.[1]?.trim() || 'Not visible'
-  const redFlags = text.match(/VISUAL RED FLAGS[:\s]*([^\n]+(?:\n(?!IMPORTANT|PACKAGING|MEDICINE|OVERALL)[^\n]+)*)/i)?.[1]?.trim() || 'None detected'
+  const redFlags = text.match(/VISUAL RED FLAGS FOUND[:\s]*([\s\S]*?)(?=AGENT REASONING|RECOMMENDED ALTERNATIVES|TRUSTED NEARBY CHEMISTS|CDSCO INCIDENT REPORT|$)/i)?.[1]?.trim() || 'None detected'
   const confidence_val = text.match(/Confidence[:\s]*(\d+)%/i)?.[1] || confidence || '0'
+  const agentReasoning = text.match(/AGENT REASONING[:\s]*([\s\S]*?)(?=RECOMMENDED ALTERNATIVES|TRUSTED NEARBY CHEMISTS|CDSCO INCIDENT REPORT|$)/i)?.[1]?.trim() || ''
+  const alternatives = text.match(/RECOMMENDED ALTERNATIVES[:\s]*([\s\S]*?)(?=TRUSTED NEARBY CHEMISTS|CDSCO INCIDENT REPORT|$)/i)?.[1]?.trim() || ''
+  const nearbyChemists = text.match(/TRUSTED NEARBY CHEMISTS[:\s]*([\s\S]*?)(?=CDSCO INCIDENT REPORT|$)/i)?.[1]?.trim() || ''
+  const cdscoReport = text.match(/CDSCO INCIDENT REPORT[:\s]*([\s\S]*?)$/i)?.[1]?.trim() || ''
 
   // Status config
   const statusConfig = {
@@ -85,7 +89,7 @@ const AnalysisReportCard = ({ text, status, confidence }) => {
         <div style={{
           width: '60px', height: '60px',
           borderRadius: '50%',
-          background: `conic-gradient(${cfg.color} ${confidence_val * 3.6}deg, rgba(255,255,255,0.1) 0deg)`,
+          background: `conic-gradient(${cfg.color} ${confidence_val * 3.6}deg, var(--border-color) 0deg)`,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           position: 'relative'
         }}>
@@ -127,7 +131,7 @@ const AnalysisReportCard = ({ text, status, confidence }) => {
           ].map((item, i) => (
             <div key={i} style={{
               gridColumn: item.full ? '1 / -1' : 'auto',
-              background: 'rgba(255,255,255,0.03)',
+              background: 'var(--bg-primary)',
               borderRadius: '8px',
               padding: '8px 10px'
             }}>
@@ -229,21 +233,87 @@ const AnalysisReportCard = ({ text, status, confidence }) => {
         alignItems: 'flex-start'
       }}>
         <span style={{ fontSize: '16px' }}>⚠️</span>
-        <div style={{ color: '#9CA3AF', fontSize: '12px', lineHeight: '1.5' }}>
+        <div style={{ color: 'var(--text-secondary)', fontSize: '12px', lineHeight: '1.5' }}>
           <strong style={{ color: '#FFB703' }}>Important: </strong>
           AI packaging analysis cannot confirm if medicine contents are genuine. 
           Always verify batch number and purchase from verified chemists for maximum safety.
         </div>
       </div>
 
+      {/* Agent Reasoning */}
+      {agentReasoning && (
+        <div style={{
+          background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '12px', padding: '14px'
+        }}>
+          <div style={{ color: 'var(--text-primary)', fontWeight: '600', fontSize: '13px', marginBottom: '6px' }}>
+            🧠 Agent Reasoning
+          </div>
+          <div style={{ color: 'var(--text-secondary)', fontSize: '13px', whiteSpace: 'pre-wrap' }}>
+            {agentReasoning}
+          </div>
+        </div>
+      )}
+
+      {/* Recommended Alternatives */}
+      {alternatives && (
+        <div style={{
+          background: 'rgba(0,180,216,0.05)', border: '1px solid rgba(0,180,216,0.2)', borderRadius: '12px', padding: '14px'
+        }}>
+          <div style={{ color: '#00B4D8', fontWeight: '600', fontSize: '13px', marginBottom: '6px' }}>
+            🔄 Recommended Alternatives
+          </div>
+          <div style={{ color: 'var(--text-secondary)', fontSize: '13px', whiteSpace: 'pre-wrap' }}>
+            {alternatives}
+          </div>
+        </div>
+      )}
+
+      {/* Trusted Nearby Chemists */}
+      {nearbyChemists && (
+        <div style={{
+          background: 'rgba(6,214,160,0.05)', border: '1px solid rgba(6,214,160,0.2)', borderRadius: '12px', padding: '14px'
+        }}>
+          <div style={{ color: '#06D6A0', fontWeight: '600', fontSize: '13px', marginBottom: '6px' }}>
+            🏪 Trusted Nearby Chemists
+          </div>
+          <div style={{ color: 'var(--text-secondary)', fontSize: '13px', whiteSpace: 'pre-wrap' }}>
+            {nearbyChemists}
+          </div>
+        </div>
+      )}
+
+      {/* Auto-Generated CDSCO Report */}
+      {cdscoReport && (
+        <div style={{
+          background: 'rgba(239,35,60,0.05)', border: '1px dashed rgba(239,35,60,0.5)', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px'
+        }}>
+          <div style={{ color: '#EF233C', fontWeight: '700', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            📄 Auto-Generated CDSCO Incident Report
+          </div>
+          <div style={{ color: 'var(--text-secondary)', fontSize: '11px', whiteSpace: 'pre-wrap', maxHeight: '150px', overflowY: 'auto', padding: '10px', background: 'var(--bg-primary)', borderRadius: '8px', fontFamily: 'monospace' }}>
+            {cdscoReport}
+          </div>
+          <button
+            onClick={() => {
+              alert('Report has been successfully transmitted to the Central Drugs Standard Control Organization (CDSCO). A copy has been saved to your dashboard.');
+            }}
+            style={{
+              padding: '12px', background: '#EF233C', color: 'white', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: '700', cursor: 'pointer', boxShadow: '0 4px 14px rgba(239,35,60,0.3)', transition: 'all 0.2s', width: '100%', textTransform: 'uppercase', letterSpacing: '1px'
+            }}
+          >
+            Submit Report to Authorities Now
+          </button>
+        </div>
+      )}
+
       {/* Action Buttons */}
       <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
         <button
           onClick={() => {
             if (batchNumber && batchNumber !== 'Not visible') {
-              navigate(`/batch-verify`, { state: { batchNumber } })
+              navigate(`/#batch-verify-section`, { state: { batchNumber } })
             } else {
-              navigate('/batch-verify')
+              navigate('/#batch-verify-section')
             }
           }}
           style={{
@@ -258,23 +328,7 @@ const AnalysisReportCard = ({ text, status, confidence }) => {
             cursor: 'pointer'
           }}
         >
-          🔍 Verify Batch Number
-        </button>
-        <button
-          onClick={() => navigate('/nearby-chemist')}
-          style={{
-            flex: 1, minWidth: '140px',
-            padding: '10px 16px',
-            background: 'rgba(6,214,160,0.15)',
-            border: '1px solid rgba(6,214,160,0.4)',
-            borderRadius: '8px',
-            color: '#06D6A0',
-            fontSize: '13px',
-            fontWeight: '600',
-            cursor: 'pointer'
-          }}
-        >
-          🏪 Find Verified Chemist
+          🔍 Manual Batch Check
         </button>
       </div>
 

@@ -4,29 +4,6 @@
 
 /* CSS Theme Variables */
 :root,
-:root[data-theme='dark'] {
-  --bg-primary: #0A0F1E;
-  --bg-secondary: #111827;
-  --text-primary: #F8F9FA;
-  --text-secondary: #9CA3AF;
-  --border-color: #1F2937;
-  --primary: #00B4D8;
-  --secondary: #0077B6;
-  --success: #06D6A0;
-  --danger: #EF233C;
-  --warning: #FFB703;
-  --bg-primary-rgb: 10 15 30;
-  --bg-secondary-rgb: 17 24 39;
-  --text-primary-rgb: 248 249 250;
-  --text-secondary-rgb: 156 163 175;
-  --border-color-rgb: 31 41 55;
-  --primary-rgb: 0 180 216;
-  --secondary-rgb: 0 119 182;
-  --success-rgb: 6 214 160;
-  --danger-rgb: 239 35 60;
-  --warning-rgb: 255 183 3;
-}
-
 :root[data-theme='light'] {
   --bg-primary: #F0F4F8;
   --bg-secondary: #FFFFFF;
@@ -48,6 +25,29 @@
   --success-rgb: 5 150 105;
   --danger-rgb: 220 38 38;
   --warning-rgb: 245 158 11;
+}
+
+:root[data-theme='dark'] {
+  --bg-primary: #0A0F1E;
+  --bg-secondary: #111827;
+  --text-primary: #F8F9FA;
+  --text-secondary: #9CA3AF;
+  --border-color: #1F2937;
+  --primary: #00B4D8;
+  --secondary: #0077B6;
+  --success: #06D6A0;
+  --danger: #EF233C;
+  --warning: #FFB703;
+  --bg-primary-rgb: 10 15 30;
+  --bg-secondary-rgb: 17 24 39;
+  --text-primary-rgb: 248 249 250;
+  --text-secondary-rgb: 156 163 175;
+  --border-color-rgb: 31 41 55;
+  --primary-rgb: 0 180 216;
+  --secondary-rgb: 0 119 182;
+  --success-rgb: 6 214 160;
+  --danger-rgb: 239 35 60;
+  --warning-rgb: 255 183 3;
 }
 
 * {
@@ -265,6 +265,41 @@ body {
 /* Loading skeleton */
 .skeleton {
   @apply animate-pulse bg-bg-secondary rounded-lg;
+}
+
+/* Typography overrides for Markdown/Prose */
+.prose {
+  color: var(--text-primary) !important;
+  max-width: 100%;
+}
+
+.prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6, .prose strong, .prose b {
+  color: var(--text-primary) !important;
+}
+
+.prose p, .prose li, .prose span {
+  color: var(--text-primary) !important;
+}
+
+.prose a {
+  color: var(--primary) !important;
+}
+
+.prose blockquote {
+  border-left-color: var(--primary) !important;
+  color: var(--text-secondary) !important;
+}
+
+.prose code {
+  color: var(--primary) !important;
+  background-color: var(--bg-primary) !important;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+.prose pre {
+  background-color: var(--bg-secondary) !important;
+  border: 1px solid var(--border-color) !important;
 }
 
 /* Responsive text */

@@ -10,13 +10,13 @@ import { AuthProvider } from './context/AuthContext.jsx';
 
 // Pages
 import Home from './pages/Home.jsx';
-import Scanner from './pages/Scanner.jsx';
-import BatchVerify from './pages/BatchVerify.jsx';
-import ReportFake from './pages/ReportFake.jsx';
-import MedicineInfo from './pages/MedicineInfo.jsx';
-import NearbyChemist from './pages/NearbyChemist.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import Alerts from './pages/Alerts.jsx';
+import BatchVerify from './pages/BatchVerify.jsx';
+import NearbyChemist from './pages/NearbyChemist.jsx';
+import MedicineInfo from './pages/MedicineInfo.jsx';
+import Sidebar from './components/common/Sidebar.jsx';
+import MedicalBackground from './components/common/MedicalBackground.jsx';
 import NotFound from './pages/NotFound.jsx';
 import Login from './pages/Login.jsx';
 import Register from './pages/Register.jsx';
@@ -29,20 +29,24 @@ import AccessDenied from './pages/AccessDenied.jsx';
 import { ROUTES } from './utils/constants.js';
 
 const ScrollToTop = () => {
-  const { pathname } = useLocation();
+  const { pathname, hash } = useLocation();
 
   useEffect(() => {
-    // Temporarily disable smooth scrolling
-    document.documentElement.style.scrollBehavior = 'auto';
-    window.scrollTo(0, 0);
-    
-    // Restore smooth scrolling for intra-page links
-    const timeoutId = setTimeout(() => {
-      document.documentElement.style.scrollBehavior = '';
-    }, 10);
-
-    return () => clearTimeout(timeoutId);
-  }, [pathname]);
+    if (hash) {
+      setTimeout(() => {
+        const element = document.getElementById(hash.replace('#', ''));
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth' });
+        }
+      }, 50);
+    } else {
+      document.documentElement.style.scrollBehavior = 'auto';
+      window.scrollTo(0, 0);
+      setTimeout(() => {
+        document.documentElement.style.scrollBehavior = '';
+      }, 10);
+    }
+  }, [pathname, hash]);
 
   return null;
 };
@@ -52,22 +56,21 @@ function App() {
     <ThemeProvider>
       <AuthProvider>
         <AppProvider>
-          <div className="flex flex-col min-h-screen bg-bg-primary">
+          <div className="flex flex-col min-h-screen bg-bg-primary relative">
+            <MedicalBackground />
             <Navbar />
             <ScrollToTop />
             
-            <main className="flex-grow">
-              <Routes>
-                {/* Public Routes */}
-                <Route path={ROUTES.HOME} element={<Home />} />
-                <Route path={ROUTES.SCANNER} element={<Scanner />} />
-                <Route path={ROUTES.BATCH_VERIFY} element={<BatchVerify />} />
-                <Route path={ROUTES.REPORT_FAKE} element={<ReportFake />} />
-                <Route path={ROUTES.MEDICINE_INFO} element={<MedicineInfo />} />
-                <Route path={ROUTES.NEARBY_CHEMIST} element={<NearbyChemist />} />
-                <Route path={ROUTES.ALERTS} element={<Alerts />} />
-                
-                {/* Auth Routes */}
+              <div className="flex flex-1">
+                <Sidebar />
+                <main className="flex-1 overflow-x-hidden">
+                  <Routes>
+                    {/* Public Routes */}
+                    <Route path={ROUTES.HOME} element={<Home />} />
+                    <Route path={ROUTES.ALERTS} element={<Alerts />} />
+                    <Route path={ROUTES.BATCH_VERIFY} element={<BatchVerify />} />
+                    <Route path={ROUTES.NEARBY_CHEMIST} element={<NearbyChemist />} />
+                    <Route path={ROUTES.MEDICINE_INFO} element={<MedicineInfo />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/register" element={<Register />} />
 
@@ -101,8 +104,9 @@ function App() {
                 <Route path={ROUTES.DASHBOARD} element={<Dashboard />} />
                 <Route path="/access-denied" element={<AccessDenied />} />
                 <Route path="*" element={<NotFound />} />
-              </Routes>
-            </main>
+                  </Routes>
+                </main>
+              </div>
 
             <Footer />
 
@@ -111,20 +115,20 @@ function App() {
               position="bottom-right"
               toastOptions={{
                 style: {
-                  background: '#111827',
-                  color: '#F8F9FA',
-                  border: '1px solid #1F2937',
+                  background: 'var(--bg-secondary)',
+                  color: 'var(--text-primary)',
+                  border: '1px solid var(--border-color)',
                 },
                 success: {
                   iconTheme: {
-                    primary: '#06D6A0',
-                    secondary: '#111827',
+                    primary: 'var(--success)',
+                    secondary: 'var(--bg-secondary)',
                   },
                 },
                 error: {
                   iconTheme: {
-                    primary: '#EF233C',
-                    secondary: '#111827',
+                    primary: 'var(--danger)',
+                    secondary: 'var(--bg-secondary)',
                   },
                 },
               }}

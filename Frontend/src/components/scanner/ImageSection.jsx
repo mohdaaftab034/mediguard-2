@@ -28,41 +28,49 @@ const ImageSection = ({ onAnalyze, isAnalyzing, hasAnalyzed }) => {
         onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
         onDragLeave={() => setIsDragging(false)}
         onDrop={onDrop}
-        className={`relative aspect-square rounded-3xl border-2 border-dashed flex flex-col items-center justify-center transition-all overflow-hidden ${
-          isDragging ? 'border-primary bg-primary/10 scale-[1.02]' : 'border-border-color bg-bg-secondary hover:border-primary/50'
+        className={`relative aspect-video lg:aspect-auto lg:min-h-[350px] py-6 rounded-3xl border border-dashed flex flex-col items-center justify-center transition-all overflow-hidden ${
+          isDragging ? 'border-primary bg-primary/10 scale-[1.02]' : 'border-border-color bg-bg-primary/50 hover:border-primary/50'
         }`}
       >
         {preview ? (
           <>
-            <img src={preview} alt="Medicine" className="w-full h-full object-cover" />
+            <img src={preview} alt="Medicine" className="w-full h-full object-contain p-2" />
             <button 
               type="button"
               onClick={() => { setPreview(null); setSelectedFile(null); }}
-              className="absolute top-4 right-4 p-2 bg-danger rounded-xl text-white shadow-xl hover:scale-110 transition-transform"
+              className="absolute top-4 right-4 p-2 bg-red-500/80 rounded-xl text-white shadow-xl hover:scale-110 transition-transform backdrop-blur-md"
             >
               <X size={20} />
             </button>
           </>
         ) : (
-          <label className="flex flex-col items-center gap-4 cursor-pointer p-8 text-center w-full h-full justify-center">
+          <label className="group flex flex-col items-center gap-1 cursor-pointer p-4 text-center w-full h-full justify-center">
             <input 
               type="file" 
               className="hidden" 
               accept="image/*" 
               onChange={(e) => handleFileSelect(e.target.files[0])} 
             />
-            <div className="p-5 rounded-2xl bg-primary/10 text-primary">
-              <Upload size={32} />
+            <div className="mb-4 relative group-hover:scale-110 transition-transform duration-300">
+              <img src="/agent-avatar.png" alt="Agent Avatar" className="w-36 h-36 object-contain mx-auto drop-shadow-[0_0_15px_rgba(0,180,216,0.3)]" />
+              <div className="absolute bottom-2 right-4 w-4 h-4 bg-success rounded-full border-2 border-bg-secondary shadow-[0_0_10px_rgba(6,214,160,0.5)] animate-pulse" />
             </div>
-            <div>
-              <p className="text-lg font-bold text-text-primary">Upload Medicine</p>
-              <p className="text-sm text-text-secondary">Drag and drop or click to browse</p>
+            <p className="text-base font-bold text-text-primary tracking-wide">Drag & Drop Packaging Image</p>
+            <p className="text-sm text-text-secondary">or click to browse from your device</p>
+            
+            <div className="flex items-center gap-4 w-1/2 mx-auto my-2">
+              <div className="h-px bg-border-color flex-1"></div>
+              <span className="text-[10px] text-text-secondary font-bold tracking-widest opacity-70">OR</span>
+              <div className="h-px bg-border-color flex-1"></div>
             </div>
-            <div className="flex gap-4 text-[10px] text-text-secondary uppercase font-bold tracking-widest mt-2">
-              <span>JPG, PNG, WEBP</span>
-              <span>•</span>
-              <span>MAX 20MB</span>
-            </div>
+
+            <button 
+              type="button"
+              onClick={(e) => { e.preventDefault(); document.querySelector('input[type="file"]').click(); }}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-bg-primary text-text-primary text-sm font-medium border border-border-color hover:bg-bg-secondary transition-colors"
+            >
+              <ImageIcon size={16} /> Use Device Camera
+            </button>
           </label>
         )}
       </div>
@@ -71,10 +79,10 @@ const ImageSection = ({ onAnalyze, isAnalyzing, hasAnalyzed }) => {
         type="button"
         onClick={() => onAnalyze(selectedFile)}
         disabled={!selectedFile || isAnalyzing}
-        className={`w-full py-4 rounded-2xl font-bold flex items-center justify-center gap-3 transition-all ${
+        className={`w-full py-4 rounded-2xl font-bold flex items-center justify-center gap-3 transition-all text-white ${
           !selectedFile || isAnalyzing
-            ? 'bg-bg-secondary text-text-secondary cursor-not-allowed'
-            : 'bg-primary text-white shadow-lg shadow-primary/30 hover:scale-[1.02] active:scale-95'
+            ? 'bg-bg-primary text-text-secondary cursor-not-allowed border border-border-color'
+            : 'bg-gradient-to-r from-primary to-secondary shadow-[0_0_20px_rgba(0,180,216,0.3)] hover:shadow-[0_0_30px_rgba(0,180,216,0.5)] hover:scale-[1.02] active:scale-95'
         }`}
       >
         {isAnalyzing ? (

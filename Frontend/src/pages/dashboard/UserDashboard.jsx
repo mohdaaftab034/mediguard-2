@@ -13,7 +13,7 @@ const UserDashboard = () => {
 
   const handleAction = (action) => {
     if (action === 'scan') {
-      navigate('/scanner');
+      navigate('/#scanner-section');
     } else if (action === 'report') {
       navigate('/report-fake');
     } else if (action === 'chemist') {

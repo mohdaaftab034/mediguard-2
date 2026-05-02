@@ -2,9 +2,12 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { Shield, Mail, MapPin, Phone, Facebook, Twitter, Linkedin, Github } from 'lucide-react';
 import { CDSCO_HELPLINE, ROUTES } from '../../utils/constants.js';
+import { useContext } from 'react';
+import { ThemeContext } from '../../context/ThemeContext.jsx';
 
 const Footer = () => {
   const currentYear = new Date().getFullYear();
+  const { theme } = useContext(ThemeContext);
 
   const footerSections = [
     {
@@ -51,13 +54,8 @@ const Footer = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-8">
           {/* Brand Column */}
           <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <div className="p-2 rounded-lg bg-gradient-to-r from-primary to-secondary">
-                <Shield size={20} className="text-bg-primary" />
-              </div>
-              <span className="text-lg font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-                MediGuard
-              </span>
+            <div className="flex items-center">
+              <img src={theme.name === 'dark' ? '/logo.png' : '/logo-light.png'} alt="MediGuard Logo" className="h-28 object-contain" />
             </div>
             <p className="text-text-secondary text-sm leading-relaxed">
               AI-powered fake medicine detection platform making India's medicine supply safer.

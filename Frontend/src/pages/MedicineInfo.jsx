@@ -239,7 +239,7 @@ const MedicineInfo = () => {
   };
 
   return (
-    <div className="min-h-screen bg-bg-primary text-text-primary">
+    <div className="bg-bg-primary text-text-primary py-12" id="medicine-info-section">
       <div className="max-w-7xl mx-auto px-4 py-8 lg:py-10">
         <section className="mb-8" ref={suggestionRef}>
           <div className="rounded-2xl border border-border-color bg-bg-secondary p-6 md:p-8 shadow-xl">

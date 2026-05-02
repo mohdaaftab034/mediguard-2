@@ -1,7 +1,7 @@
 import axios from 'axios'
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions'
-const GROQ_VISION_MODEL = 'meta-llama/llama-4-scout-17b-16e-instruct'
+const GROQ_VISION_MODEL = 'llama-3.3-70b-versatile'
 const GROQ_CHAT_MODEL = 'llama-3.3-70b-versatile'
 
 const PACKAGING_ANALYSIS_PROMPT = `You are a medicine packaging quality inspector. Your job is ONLY to check if the packaging looks professionally made or has visual problems. You CANNOT determine if a medicine is fake or genuine from image alone - only lab tests can do that.
@@ -15,6 +15,7 @@ CHECK ONLY THESE VISUAL THINGS:
 6. Is a hologram or security seal visible?
 
 RESPOND WITH EXACTLY THIS FORMAT AND DO NOT USE ANY EMOJIS OR SPECIAL SYMBOLS:
+
 
 PACKAGING INSPECTION REPORT
 
@@ -52,7 +53,7 @@ RECOMMENDED NEXT STEPS
 2. Purchase from a verified chemist on our platform
 3. If in doubt, contact the manufacturer directly or report to CDSCO helpline 1800-180-3024`
 
-const fetchImageAsBase64 = async (imageUrl) => {
+export const fetchImageAsBase64 = async (imageUrl) => {
   let fetchUrl = imageUrl
   if (/res\.cloudinary\.com/i.test(imageUrl) && imageUrl.includes('/upload/')) {
     fetchUrl = imageUrl.replace('/upload/', '/upload/f_jpg,q_90,w_1600/')
@@ -124,6 +125,7 @@ export const analyzeImage = async (imageUrl) => {
     const { base64Data, mimeType } = await fetchImageAsBase64(imageUrl)
     const dataUrl = `data:${mimeType};base64,${base64Data}`
 
+    console.log('[GROQ] Sending request with model:', GROQ_VISION_MODEL);
     const response = await axios.post(
       GROQ_API_URL,
       {
@@ -156,6 +158,7 @@ export const analyzeImage = async (imageUrl) => {
         timeout: 60000
       }
     )
+    console.log('[GROQ] Response received successfully');
 
     const text = extractText(response)
 
@@ -171,6 +174,7 @@ export const analyzeImage = async (imageUrl) => {
       redFlags: parseRedFlags(text)
     }
   } catch (error) {
+    console.error('[GROQ] API Error:', error?.response?.data || error.message);
     throw new Error(error?.response?.data?.error?.message || error.message || 'Image analysis failed')
   }
 }

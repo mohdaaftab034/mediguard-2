@@ -105,7 +105,7 @@ const ChatSection = ({ messages, onSendMessage, isTyping, hasAnalyzed }) => {
                             ? 'bg-warning/10 border-l-4 border-warning text-text-primary rounded-tl-none'
                             : msg.isAnalysis 
                               ? 'bg-transparent border-none p-0 max-w-none'
-                              : 'bg-bg-secondary border-l-4 border-primary text-text-primary rounded-tl-none prose prose-invert max-w-none'
+                              : 'bg-bg-secondary border-l-4 border-primary text-text-primary rounded-tl-none prose max-w-none'
                       }`}>
                         {msg.role === 'ai' ? (
                           msg.isAnalysis ? (
@@ -138,10 +138,10 @@ const ChatSection = ({ messages, onSendMessage, isTyping, hasAnalyzed }) => {
               className="flex justify-start"
             >
               <div className="flex gap-3 items-start">
-                <div className="w-8 h-8 rounded-full bg-bg-secondary border border-border-color flex items-center justify-center text-primary">
+                <div className="w-8 h-8 rounded-full bg-bg-secondary border border-border-color flex items-center justify-center text-primary shadow-sm">
                   <Shield size={14} />
                 </div>
-                <div className="bg-bg-secondary p-4 rounded-2xl rounded-tl-none border-l-4 border-primary flex items-center gap-2">
+                <div className="bg-bg-secondary p-4 rounded-2xl rounded-tl-none border-l-4 border-primary flex items-center gap-2 shadow-sm">
                   <div className="flex gap-1">
                     <motion.div animate={{ y: [0, -5, 0] }} transition={{ repeat: Infinity, duration: 0.6, delay: 0 }} className="w-1.5 h-1.5 bg-primary rounded-full" />
                     <motion.div animate={{ y: [0, -5, 0] }} transition={{ repeat: Infinity, duration: 0.6, delay: 0.2 }} className="w-1.5 h-1.5 bg-primary rounded-full" />
