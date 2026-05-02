@@ -57,14 +57,24 @@ const PORT = process.env.PORT || 5000
 
 import { runSeed } from './utils/seedData.js'
 
-connectDB().then(async () => {
-  console.log('Running automatic seeding for initial data...')
-  await runSeed()
-  await loadBatchMap()
-  app.listen(PORT, () => {
-    console.log(`MediGuard server running on port ${PORT}`)
-    startAllJobs()
-  })
-}).catch(err => {
+connectDB().catch(err => {
   console.error("Failed to connect to DB", err)
 })
+
+// Only run the server manually and execute background jobs if NOT in a serverless production environment
+if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
+  app.listen(PORT, async () => {
+    console.log(`MediGuard server running on port ${PORT}`)
+    try {
+      console.log('Running automatic seeding for initial data...')
+      await runSeed()
+      await loadBatchMap()
+      startAllJobs()
+    } catch (err) {
+      console.error("Startup script error:", err)
+    }
+  })
+}
+
+// Export the Express app for Vercel Serverless Functions
+export default app
