@@ -1,6 +1,6 @@
 export const ROUTES = {
   HOME: '/',
-  SCANNER: '/',
+  SCANNER: '/agent',
   BATCH_VERIFY: '/database',
   REPORT_FAKE: '/report',
   MEDICINE_INFO: '/info',

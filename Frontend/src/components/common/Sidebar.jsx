@@ -7,7 +7,7 @@ import { ThemeContext } from '../../context/ThemeContext.jsx';
 
 const Sidebar = () => {
   const links = [
-    { path: ROUTES.HOME, icon: MessageSquare, label: 'Agent Chat' },
+    { path: ROUTES.SCANNER, icon: MessageSquare, label: 'Agent Chat' },
     { path: ROUTES.DASHBOARD, icon: LayoutDashboard, label: 'Dashboard' },
     { path: ROUTES.BATCH_VERIFY, icon: Database, label: 'Database' },
     { path: ROUTES.NEARBY_CHEMIST, icon: MapPin, label: 'Find Chemist' },

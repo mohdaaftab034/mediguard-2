@@ -20,6 +20,8 @@ const Navbar = () => {
   const isActive = (path) => location.pathname === path;
 
   const publicNavLinks = [
+    { path: ROUTES.HOME, label: 'Home' },
+    { path: ROUTES.SCANNER, label: 'Forensic Agent' },
     { path: ROUTES.DASHBOARD, label: 'Dashboard' },
     { path: ROUTES.BATCH_VERIFY, label: 'Database' },
   ];

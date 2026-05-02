@@ -24,6 +24,7 @@ import UserDashboard from './pages/dashboard/UserDashboard.jsx';
 import ChemistDashboard from './pages/dashboard/ChemistDashboard.jsx';
 import AdminDashboard from './pages/dashboard/AdminDashboard.jsx';
 import AccessDenied from './pages/AccessDenied.jsx';
+import Scanner from './pages/Scanner.jsx';
 
 // Routes
 import { ROUTES } from './utils/constants.js';
@@ -52,21 +53,25 @@ const ScrollToTop = () => {
 };
 
 function App() {
+  const location = useLocation();
+  const isHomePage = location.pathname === ROUTES.HOME;
+
   return (
     <ThemeProvider>
       <AuthProvider>
         <AppProvider>
           <div className="flex flex-col min-h-screen bg-bg-primary relative">
             <MedicalBackground />
-            <Navbar />
+            {!isHomePage && <Navbar />}
             <ScrollToTop />
             
               <div className="flex flex-1">
-                <Sidebar />
+                {!isHomePage && <Sidebar />}
                 <main className="flex-1 overflow-x-hidden">
                   <Routes>
                     {/* Public Routes */}
                     <Route path={ROUTES.HOME} element={<Home />} />
+                    <Route path={ROUTES.SCANNER} element={<Scanner />} />
                     <Route path={ROUTES.ALERTS} element={<Alerts />} />
                     <Route path={ROUTES.BATCH_VERIFY} element={<BatchVerify />} />
                     <Route path={ROUTES.NEARBY_CHEMIST} element={<NearbyChemist />} />
@@ -108,7 +113,7 @@ function App() {
                 </main>
               </div>
 
-            <Footer />
+            {!isHomePage && <Footer />}
 
             {/* Toast Notifications */}
             <Toaster
