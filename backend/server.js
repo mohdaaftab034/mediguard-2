@@ -49,6 +49,11 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', message: 'MediGuard API is running', timestamp: new Date() })
 })
 
+// Base route to prevent 404 on deployment root
+app.get('/', (req, res) => {
+  res.json({ status: 'OK', message: 'MediGuard API is running' })
+})
+
 // Error handlers
 app.use(notFound)
 app.use(errorHandler)
