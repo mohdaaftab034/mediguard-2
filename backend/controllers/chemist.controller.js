@@ -38,9 +38,36 @@ export const updateChemistProfile = asyncHandler(async (req, res, next) => {
 })
 
 export const getNearbyChemists = asyncHandler(async (req, res, next) => {
-  // Using basic find. If coordinates are available, use geospatial queries.
-  // Assuming simple find for now as coordinates schema might not have 2dsphere index yet
-  const chemists = await Chemist.find({ isVerified: true, isBlacklisted: false }).limit(20)
+  const { lat, lng, city } = req.query
+  const latitude = parseFloat(lat)
+  const longitude = parseFloat(lng)
+
+  let chemists = []
+
+  if (latitude && longitude) {
+    // 2km radius roughly 0.018 degrees
+    chemists = await Chemist.find({
+      isVerified: true,
+      isBlacklisted: false,
+      'coordinates.lat': { $gte: latitude - 0.02, $lte: latitude + 0.02 },
+      'coordinates.lng': { $gte: longitude - 0.02, $lte: longitude + 0.02 }
+    }).limit(10).lean()
+  }
+
+  // Fallback to city search
+  if (chemists.length === 0 && city) {
+    chemists = await Chemist.find({
+      isVerified: true,
+      isBlacklisted: false,
+      city: { $regex: new RegExp(city, 'i') }
+    }).limit(10).lean()
+  }
+
+  // Final fallback
+  if (chemists.length === 0) {
+    chemists = await Chemist.find({ isVerified: true, isBlacklisted: false }).limit(5).lean()
+  }
+
   res.status(200).json(new ApiResponse(200, chemists, 'Nearby chemists fetched'))
 })
 

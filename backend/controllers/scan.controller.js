@@ -1,182 +1,328 @@
+import axios from 'axios'
 import Scan from '../models/Scan.model.js'
 import BatchNumber from '../models/BatchNumber.model.js'
-import Medicine from '../models/Medicine.model.js'
+import Chemist from '../models/Chemist.model.js'
 import { ApiError, ApiResponse } from '../utils/apiResponse.js'
 import { asyncHandler } from '../utils/asyncHandler.js'
-import { analyzeImage, askGroq } from '../services/groq.service.js'
-import { visionAnalysis, batchVerification, generateReport } from '../services/agent.service.js'
+import { 
+  fetchImageAsBase64, 
+  performOcrAndQualityCheck, 
+  generateFinalSafetyAssessment, 
+  askGroq 
+} from '../services/groq.service.js'
+import { findBatchInMap } from './batch.controller.js'
 
-export const chatWithGroq = asyncHandler(async (req, res, next) => {
-  const { question, context, history } = req.body
-  
-  if (!question) {
-    return next(new ApiError(400, 'Please provide a question'))
-  }
+export const chatAboutMedicine = asyncHandler(async (req, res) => {
+  const { message, medicineContext, conversationHistory, scanId } = req.body
 
-  const response = await askGroq(question, history || [], context)
-  res.status(200).json(new ApiResponse(200, { response }, 'Follow-up answer generated'))
-})
+  if (!message) throw new ApiError(400, 'Message is required')
 
-export const analyzeMedicine = asyncHandler(async (req, res, next) => {
-  // Expecting a Cloudinary-uploaded image or a Cloudinary image URL in the body
-  const { batchNumber, location } = req.body
-  let imageUrl = req.file?.path || req.body.imageUrl
+  const GEMINI_API_KEY = process.env.GEMINI_API_KEY
 
-  if (!imageUrl) {
-    return next(new ApiError(400, 'Please provide an image'))
-  }
-
-  const isRemoteUrl = /^https?:\/\//i.test(imageUrl)
-  const isCloudinaryUrl = /res\.cloudinary\.com/i.test(imageUrl)
-
-  if (!isRemoteUrl || !isCloudinaryUrl) {
-    return next(
-      new ApiError(
-        500,
-        'Image must be uploaded to Cloudinary before analysis. Configure Cloudinary credentials and retry.'
-      )
-    )
-  }
-
-  console.log('Analyzing Cloudinary image URL with MediGuard Agent...')
-  const aiResult = await visionAnalysis(imageUrl)
-  
-  const extractedBatch = aiResult.extracted_data?.['Batch Number'] || batchNumber
-  const extractedExpiry = aiResult.extracted_data?.['Expiry Date']
-  const medicineName = aiResult.extracted_data?.['Brand Name'] || aiResult.extracted_data?.['Generic Name']
-  const anomalies = aiResult.visual_anomalies || []
-  let confidenceScore = aiResult.confidence_score ? parseFloat(aiResult.confidence_score) * 100 : 70
-
-  // 2. Batch Number Verification
-  let batchStatus = 'NOT_CHECKED'
-  let dbData = null
-  let auditorWarning = ''
-
-  if (extractedBatch) {
-    const recalledBatch = await BatchNumber.findOne({ 
-      batchNumber: extractedBatch.toUpperCase(),
-      status: 'RECALLED'
-    })
-    if (recalledBatch) {
-      batchStatus = 'RECALLED'
-      dbData = recalledBatch
-    } else {
-      batchStatus = 'UNVERIFIED'
+  // Build medicine context from scan if scanId provided
+  let fullContext = medicineContext || ''
+  if (scanId && !fullContext) {
+    const scan = await Scan.findById(scanId).lean()
+    if (scan) {
+      fullContext = `Medicine: ${scan.medicineDetails?.name || 'Unknown'}
+Manufacturer: ${scan.medicineDetails?.manufacturer || 'Unknown'}
+Category: ${scan.medicineDetails?.category || 'Unknown'}
+Batch Status: ${scan.batchStatus}
+Risk Level: ${scan.riskLevel}`
     }
-
-    auditorWarning = await batchVerification(medicineName, extractedBatch, extractedExpiry, dbData)
   }
 
-  const hasIssues = anomalies.length > 0 || batchStatus === 'RECALLED'
-  
-  let aiStatus = 'LOOKS_PROFESSIONAL'
-  let report = ''
+  const systemPrompt = `You are MediGuard AI assistant, a helpful medicine information expert for Indian users. 
 
-  if (batchStatus !== 'RECALLED' && anomalies.length > 0) {
-    aiStatus = 'HIGH_QUALITY_SUPER_FAKE'
-  } else if (hasIssues) {
-    aiStatus = 'HAS_ISSUES'
-  }
-  
-  if (hasIssues) {
-    report = await generateReport(
-      `Visual anomalies: ${anomalies.join(', ')}. Batch status: ${batchStatus}. ${auditorWarning}`,
-      location?.city ? `${location.city}, ${location.state}` : 'Unknown',
-      batchStatus === 'RECALLED' ? 'Critical' : 'High'
-    )
-  }
+Context about the medicine being discussed:
+${fullContext}
 
-  // Format analysis text for backwards compatibility with frontend parsing if needed, 
-  // or return the raw JSON to frontend
-  const analysisText = `
-PACKAGING INSPECTION REPORT
-OVERALL STATUS
-Result: ${aiStatus}
-Confidence: ${confidenceScore}%
+The user is asking about this medicine. Search for accurate, up-to-date information and provide a helpful, detailed response. 
 
-MEDICINE DETAILS
-Medicine Name: ${medicineName || 'Not visible'}
-Manufacturer: ${aiResult.extracted_data?.Manufacturer || 'Not visible'}
-Batch Number: ${extractedBatch || 'Not visible'}
-Expiry Date: ${extractedExpiry || 'Not visible'}
+Format your response clearly with:
+- Use **bold** for important terms
+- Use bullet points for lists
+- Include pricing information in Indian Rupees when available
+- Mention any important warnings prominently
+- Keep medical advice responsible — always suggest consulting a doctor for serious concerns
+- Search for current information about this medicine`
 
-VISUAL RED FLAGS FOUND
-${anomalies.length > 0 ? anomalies.map((a, i) => `${i+1}. ${a}`).join('\n') : 'No visual red flags detected'}
-
-AGENT REASONING
-${auditorWarning}
-
-${hasIssues || aiStatus === 'HIGH_QUALITY_SUPER_FAKE' ? `RECOMMENDED ALTERNATIVES
-Based on the active ingredient (${aiResult.extracted_data?.['Generic Name'] || medicineName || 'Unknown'}), consider these verified alternatives:
-1. Verified Brand A (Generic equivalent)
-2. Verified Brand B (Generic equivalent)
-*Always consult your doctor before switching medications.*
-` : ''}
-TRUSTED NEARBY CHEMISTS
-Based on your location, here are 3 verified chemists you can trust:
-1. Apollo Pharmacy (Trust Score: 99%) - 0.5 km away
-2. MedPlus (Trust Score: 98%) - 1.2 km away
-3. Wellness Forever (Trust Score: 96%) - 2.0 km away
-
-${report ? 'CDSCO INCIDENT REPORT\n' + report : ''}
-`
-
-  console.log('[SCAN CONTROLLER] Saving scan to database...')
-  try {
-    const scan = await Scan.create({
-      user: req.user?._id || null,
-      imageUrl: imageUrl,
-      imagePublicId: req.file ? (req.file.filename || req.file.public_id || req.file.path || null) : null,
-      result: aiStatus,
-      confidence: confidenceScore,
-      analysisText: analysisText,
-      batchNumber: extractedBatch,
-      batchStatus: batchStatus,
-      location: location || {}
+  // Build conversation
+  const contents = []
+  if (conversationHistory?.length > 0) {
+    conversationHistory.slice(-6).forEach(msg => {
+      contents.push({
+        role: msg.role === 'user' ? 'user' : 'model',
+        parts: [{ text: msg.content }]
+      })
     })
-
-    console.log('[SCAN CONTROLLER] ✅ Scan saved successfully ID:', scan._id)
-
-    // 4. Update permanent Medicine Library (Simplified for chat mode)
-    // In chat mode, we mostly care about the conversational text, 
-    // but we can still try to extract name if needed later.
-
-    res.status(201).json(new ApiResponse(201, scan, 'Medicine analyzed and stored successfully'))
-  } catch (dbError) {
-    console.error('[SCAN CONTROLLER] Database Save Error:', dbError.message)
-    throw dbError
   }
+  contents.push({
+    role: 'user',
+    parts: [{ text: `${systemPrompt}\n\nUser question: ${message}` }]
+  })
+
+  // Call Gemini with Google Search grounding
+  const response = await axios.post(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
+    {
+      contents,
+      tools: [{ google_search: {} }],
+      generationConfig: {
+        maxOutputTokens: 1024,
+        temperature: 0.7
+      }
+    },
+    {
+      headers: { 'Content-Type': 'application/json' },
+      timeout: 30000
+    }
+  )
+
+  const text = response?.data?.candidates?.[0]?.content?.parts
+    ?.filter(p => p.text)
+    ?.map(p => p.text)
+    ?.join('\n') || ''
+
+  // Get search queries used if available
+  const groundingMetadata = response?.data?.candidates?.[0]?.groundingMetadata
+  const searchQueries = groundingMetadata?.webSearchQueries || []
+  const sources = groundingMetadata?.groundingChunks
+    ?.map(chunk => ({
+      title: chunk.web?.title,
+      url: chunk.web?.uri
+    }))
+    ?.filter(s => s.title && s.url)
+    ?.slice(0, 3) || []
+
+  if (!text) throw new ApiError(500, 'AI returned empty response')
+
+  return res.json(new ApiResponse(200, {
+    reply: text,
+    searchQueries,
+    sources
+  }))
 })
 
-export const getScanHistory = asyncHandler(async (req, res, next) => {
-  const { result, startDate, endDate, page = 1, limit = 10 } = req.query
-  const query = { user: req.user._id }
+export const verifyBatch = asyncHandler(async (req, res) => {
+  const rawBatch = req.query.batchNumber || req.query.batch
+
+  if (!rawBatch) throw new ApiError(400, 'Batch number is required')
+
+  const cleanBatch = String(rawBatch).trim().toUpperCase()
   
-  if (result) query.result = result
-  if (startDate || endDate) {
-    query.createdAt = {}
-    if (startDate) query.createdAt.$gte = new Date(startDate)
-    if (endDate) query.createdAt.$lte = new Date(endDate)
+  // Try map lookup first
+  const mapResult = findBatchInMap(cleanBatch)
+  if (mapResult) {
+    return res.json(new ApiResponse(200, {
+      status: mapResult.status,
+      batchNumber: mapResult.batchNumber,
+      medicine: mapResult.medicine,
+      manufacturer: mapResult.manufacturer,
+      recallDate: mapResult.recallDate,
+      recallReason: mapResult.recallReason,
+      recallAuthority: mapResult.recallAuthority,
+      severity: mapResult.severity,
+      affectedStates: mapResult.affectedStates,
+      source: 'in-memory-map'
+    }))
   }
 
-  const scans = await Scan.find(query)
+  // Fallback to DB
+  const batchRecord = await BatchNumber.findOne({
+    batchNumber: cleanBatch
+  }).lean()
+
+  if (batchRecord) {
+    return res.json(new ApiResponse(200, {
+      status: batchRecord.status,
+      batchNumber: batchRecord.batchNumber,
+      medicine: batchRecord.medicine,
+      manufacturer: batchRecord.manufacturer,
+      recallDate: batchRecord.recallDate,
+      recallReason: batchRecord.recallReason,
+      recallAuthority: batchRecord.recallAuthority,
+      severity: batchRecord.severity,
+      affectedStates: batchRecord.affectedStates,
+      source: 'database'
+    }))
+  }
+
+  return res.json(new ApiResponse(200, {
+    status: 'NOT_IN_RECALLED_LIST',
+    batchNumber: cleanBatch
+  }))
+})
+
+export const analyzeMedicine = asyncHandler(async (req, res) => {
+  if (!req.file) throw new ApiError(400, 'No image uploaded')
+
+  const cloudinaryUrl = req.file.path
+  if (!cloudinaryUrl.startsWith('http')) {
+    throw new ApiError(500, 'Cloudinary upload failed')
+  }
+
+  console.log('[SCAN] Starting pipeline for:', cloudinaryUrl)
+
+  // Step 1: Fetch Image & Run combined OCR + Quality Check
+  const { base64Data, mimeType } = await fetchImageAsBase64(cloudinaryUrl)
+  const { layer1, layer2, rawResponse: ocrRaw } = await performOcrAndQualityCheck(base64Data, mimeType)
+
+  // Step 2: Batch Number Verification
+  const detectedBatch = layer1.batchNumber
+  let batchDbResult = null
+
+  if (detectedBatch && detectedBatch !== 'Not visible') {
+    console.log('[SCAN] Checking batch in DB:', detectedBatch)
+    batchDbResult = findBatchInMap(detectedBatch) || await BatchNumber.findOne({
+      batchNumber: detectedBatch.toUpperCase().trim(),
+      status: { $in: ['RECALLED', 'UNDER_INVESTIGATION'] }
+    }).lean()
+
+    if (!batchDbResult) {
+      const normalized = detectedBatch.replace(/[-\/\s]/g, '').toUpperCase()
+      batchDbResult = await BatchNumber.findOne({
+        batchNumber: { $regex: new RegExp(`^${normalized}`, 'i') },
+        status: { $in: ['RECALLED', 'UNDER_INVESTIGATION'] }
+      }).lean()
+    }
+  }
+
+  let batchStatusText = 'Not checked'
+  if (batchDbResult) {
+    batchStatusText = batchDbResult.status === 'RECALLED' 
+      ? `⚠️ RECALLED — ${batchDbResult.recallReason} (${batchDbResult.recallAuthority})`
+      : '⚠️ Under Investigation by authorities'
+  } else if (detectedBatch) {
+    batchStatusText = '✅ Not found in recalled list'
+  }
+
+  // Step 3: Run final Safety Assessment
+  const layer3 = await generateFinalSafetyAssessment(ocrRaw, batchStatusText)
+
+  // Step 4: Get nearby chemists (2km radius)
+  let nearbyChemists = []
+  const lat = parseFloat(req.body.lat)
+  const lng = parseFloat(req.body.lng)
+  const userCity = req.body.city
+
+  if (lat && lng) {
+    // 2km is roughly 0.018 degrees
+    nearbyChemists = await Chemist.find({
+      isVerified: true,
+      isBlacklisted: false,
+      'coordinates.lat': { $gte: lat - 0.02, $lte: lat + 0.02 },
+      'coordinates.lng': { $gte: lng - 0.02, $lte: lng + 0.02 }
+    }).limit(5).lean()
+  }
+
+  // Fallback to city-based search if no nearby found or no coords
+  if (nearbyChemists.length === 0 && userCity) {
+    console.log('[SCAN] No chemists found by coordinates, falling back to city:', userCity)
+    nearbyChemists = await Chemist.find({
+      isVerified: true,
+      isBlacklisted: false,
+      city: { $regex: new RegExp(userCity, 'i') }
+    }).limit(5).lean()
+  }
+
+  // Final fallback: just get some verified chemists if still none
+  if (nearbyChemists.length === 0) {
+    nearbyChemists = await Chemist.find({ isVerified: true, isBlacklisted: false }).limit(3).lean()
+  }
+
+  // Step 5: Final Risk Calculation
+  let finalRiskLevel = layer3.riskLevel
+  let finalStatus = layer3.dbStatus
+
+  if (batchDbResult?.status === 'RECALLED') {
+    finalRiskLevel = 'CRITICAL'
+    finalStatus = 'FAKE'
+  }
+
+  // Step 6: Build final analysis text
+  const statusIcon = finalRiskLevel === 'CRITICAL' ? '🚨' : finalRiskLevel === 'HIGH' ? '⛔' : '✅'
+  const finalText = `${statusIcon} **${finalRiskLevel} RISK** — ${layer3.verdict.replace(/_/g, ' ')} (${layer3.confidence}% confidence)\n\nMedicine: ${layer1.medicineName || 'Unknown'}\nBatch: ${detectedBatch || 'Not visible'}\nStatus: ${batchStatusText}`
+
+  // Step 7: Save to DB
+  const scan = await Scan.create({
+    user: req.user?._id || null,
+    imageUrl: cloudinaryUrl,
+    imagePublicId: req.file.filename,
+    result: finalStatus,
+    confidence: layer3.confidence,
+    reasons: [...layer2.visualConcerns, ...layer2.missingFields],
+    recommendations: layer3.nextSteps.split('\n').filter(l => l.trim()),
+    medicineDetails: {
+      name: layer1.medicineName || 'Not detected',
+      genericName: layer1.genericName || 'Not detected',
+      manufacturer: layer1.manufacturer || 'Not detected',
+      category: layer1.requiresPrescription ? 'Prescription' : 'OTC',
+      estimatedMRP: layer1.mrp || 'Not visible',
+      batchNumber: detectedBatch || 'Not visible'
+    },
+    analysisText: finalText,
+    batchStatus: batchDbResult?.status || (detectedBatch ? 'NOT_IN_RECALLED_LIST' : 'NOT_DETECTED'),
+    batchDetails: batchDbResult,
+    nearbyChemists,
+    riskLevel: finalRiskLevel,
+    analysisLayers: { layer1, layer2, layer3 },
+    location: {
+      city: req.body.city || '',
+      state: req.body.state || '',
+      coordinates: { lat: lat || 0, lng: lng || 0 }
+    }
+  })
+
+  return res.status(200).json(new ApiResponse(200, {
+    scanId: scan._id,
+    pipeline: {
+      step1_packaging: {
+        status: finalStatus,
+        confidence: layer3.confidence,
+        fields: layer1,
+        redFlags: layer2.visualConcerns,
+        text: finalText,
+        layer1, layer2, layer3
+      },
+      step2_batch: batchDbResult || { status: detectedBatch ? 'NOT_IN_RECALLED_LIST' : 'NOT_DETECTED', batchNumber: detectedBatch },
+      step3_medicineDb: { found: false },
+      step4_chemists: nearbyChemists,
+      finalRiskLevel,
+      finalStatus
+    }
+  }, 'Analysis complete'))
+})
+
+export const getScanHistory = asyncHandler(async (req, res) => {
+  const page = parseInt(req.query.page) || 1
+  const limit = parseInt(req.query.limit) || 20
+
+  const scans = await Scan.find({ user: req.user._id })
     .sort({ createdAt: -1 })
     .skip((page - 1) * limit)
     .limit(limit)
-    
-  const total = await Scan.countDocuments(query)
+    .select('imageUrl result confidence riskLevel medicineDetails batchStatus createdAt')
+    .lean()
 
-  res.status(200).json(new ApiResponse(200, { scans, total, pages: Math.ceil(total / limit) }, 'History fetched successfully'))
+  const total = await Scan.countDocuments({ user: req.user._id })
+
+  return res.json(new ApiResponse(200, {
+    scans,
+    total,
+    page,
+    totalPages: Math.ceil(total / limit)
+  }))
 })
 
-export const getScanById = asyncHandler(async (req, res, next) => {
-  const scan = await Scan.findOne({ _id: req.params.id, user: req.user._id })
-  
-  if (!scan) {
-    return next(new ApiError(404, 'Scan not found'))
-  }
+export const getScanById = asyncHandler(async (req, res) => {
+  const scan = await Scan.findOne({ 
+    _id: req.params.id, 
+    user: req.user._id 
+  }).lean()
 
-  res.status(200).json(new ApiResponse(200, scan, 'Scan fetched successfully'))
+  if (!scan) throw new ApiError(404, 'Scan not found')
+  return res.json(new ApiResponse(200, scan))
 })
 
 export const deleteScan = asyncHandler(async (req, res, next) => {

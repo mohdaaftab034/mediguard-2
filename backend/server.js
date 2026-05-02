@@ -14,6 +14,7 @@ import alertRoutes from './routes/alert.routes.js'
 import batchRoutes from './routes/batch.routes.js'
 import dashboardRoutes from './routes/dashboard.routes.js'
 import { startAllJobs } from './jobs/cdscoScraper.job.js'
+import { loadBatchMap } from './controllers/batch.controller.js'
 
 dotenv.config()
 
@@ -59,6 +60,7 @@ import { runSeed } from './utils/seedData.js'
 connectDB().then(async () => {
   console.log('Running automatic seeding for initial data...')
   await runSeed()
+  await loadBatchMap()
   app.listen(PORT, () => {
     console.log(`MediGuard server running on port ${PORT}`)
     startAllJobs()

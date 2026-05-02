@@ -25,6 +25,7 @@ import ChemistDashboard from './pages/dashboard/ChemistDashboard.jsx';
 import AdminDashboard from './pages/dashboard/AdminDashboard.jsx';
 import AccessDenied from './pages/AccessDenied.jsx';
 import Scanner from './pages/Scanner.jsx';
+import ScanHistory from './pages/dashboard/ScanHistory.jsx';
 
 // Routes
 import { ROUTES } from './utils/constants.js';
@@ -107,6 +108,7 @@ function App() {
 
                 {/* Fallback Route */}
                 <Route path={ROUTES.DASHBOARD} element={<Dashboard />} />
+                <Route path={ROUTES.SCAN_HISTORY} element={<ProtectedRoute><ScanHistory /></ProtectedRoute>} />
                 <Route path="/access-denied" element={<AccessDenied />} />
                 <Route path="*" element={<NotFound />} />
                   </Routes>

@@ -1,227 +1,210 @@
-import React, { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
-import { useLocation, useNavigate } from 'react-router-dom';
-import { AlertCircle, Check, ShieldAlert, ShieldCheck, ShieldX } from 'lucide-react';
-import { useScanner } from '../hooks/useScanner.js';
-import { toast } from 'react-hot-toast';
+import { useState } from 'react'
+import api from '../services/api.js'
 
-const statusConfig = {
-  RECALLED: {
-    icon: ShieldX,
-    title: 'Officially Recalled Batch',
-    subtitle: 'Do not consume. Return it to the chemist and report it.'
-  },
-  UNDER_INVESTIGATION: {
-    icon: ShieldAlert,
-    title: 'Under Investigation',
-    subtitle: 'This batch is not cleared. Verify with the manufacturer and authority.'
-  },
-  NOT_LISTED: {
-    icon: ShieldCheck,
-    title: 'Not Listed in Recall Database',
-    subtitle: 'This batch is not in the recalled medicines database, but that does not prove authenticity.'
-  }
-};
+const severityConfig = {
+  CRITICAL: { color: '#EF233C', bg: 'rgba(239,35,60,0.1)', border: 'rgba(239,35,60,0.3)', label: 'CRITICAL ALERT', icon: '🚨' },
+  HIGH: { color: '#FF6B35', bg: 'rgba(255,107,53,0.1)', border: 'rgba(255,107,53,0.3)', label: 'HIGH RISK', icon: '⛔' },
+  MEDIUM: { color: '#FFB703', bg: 'rgba(255,183,3,0.1)', border: 'rgba(255,183,3,0.3)', label: 'WARNING', icon: '⚠️' }
+}
 
-const BatchVerify = () => {
-  const [batchNumber, setBatchNumber] = useState('');
-  const [errors, setErrors] = useState({});
-  const location = useLocation();
-  const navigate = useNavigate();
+export default function BatchVerify() {
+  const [batchNumber, setBatchNumber] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [result, setResult] = useState(null)
+  const [error, setError] = useState(null)
 
-  const { scanning, result, performBatchVerify, clearResult } = useScanner();
+  const handleVerify = async (e) => {
+    e.preventDefault()
+    if (!batchNumber.trim()) return
 
-  useEffect(() => {
-    const prefill = location.state?.batchNumber || new URLSearchParams(location.search).get('batch') || '';
-    if (prefill) setBatchNumber(prefill);
-  }, [location]);
+    setLoading(true)
+    setResult(null)
+    setError(null)
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    const newErrors = {};
-
-    if (!batchNumber.trim()) newErrors.batchNumber = 'Batch number is required';
-
-    setErrors(newErrors);
-
-    if (Object.keys(newErrors).length === 0) {
-      performBatchVerify(batchNumber);
+    try {
+      // Direct call to scan controller's internal logic or new dedicated batch endpoint
+      const response = await api.get(`/scan/verify-batch?batchNumber=${batchNumber.trim()}`)
+      setResult(response.data.data)
+    } catch (err) {
+      setError(err.response?.data?.message || 'Verification failed. Please try again.')
+    } finally {
+      setLoading(false)
     }
-  };
-
-  const verification = result?.data || result;
-  const config = verification ? statusConfig[verification.status] || statusConfig.NOT_LISTED : null;
-  const StatusIcon = config?.icon;
+  }
 
   return (
-    <div className="bg-bg-primary py-12" id="batch-verify-section">
-      {/* Header */}
-      <div className="py-12 bg-gradient-to-br from-bg-secondary to-bg-primary border-b border-border-color">
-        <div className="max-w-4xl mx-auto px-4 text-center space-y-2">
-          <h1 className="text-4xl md:text-5xl font-bold text-text-primary">
-            Batch <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary">Verification</span>
-          </h1>
-          <p className="text-text-secondary">Verify medicines using batch numbers and manufacturer information</p>
-        </div>
+    <div style={{ maxWidth: '700px', margin: '40px auto', padding: '0 16px' }}>
+      <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+        <h1 style={{ fontSize: '28px', fontWeight: '800', color: 'var(--text-primary)', marginBottom: '8px' }}>
+          Batch Verification Portal
+        </h1>
+        <p style={{ color: '#9CA3AF', fontSize: '15px' }}>
+          Instantly check if your medicine batch is in the official CDSCO recalled or spurious list.
+        </p>
       </div>
 
-      <div className="max-w-3xl mx-auto px-4 py-12">
-        {result ? (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="space-y-6"
-          >
-            <div className={`p-8 rounded-3xl border-2 ${verification?.status === 'RECALLED' ? 'border-danger bg-danger/10' : verification?.status === 'UNDER_INVESTIGATION' ? 'border-warning bg-warning/10' : 'border-success bg-success/10'}`}>
-              <div className="flex items-start gap-4">
-                <div className="p-3 rounded-2xl bg-bg-primary/80 border border-border-color">
-                  {StatusIcon && <StatusIcon size={32} className={verification?.status === 'RECALLED' ? 'text-danger' : verification?.status === 'UNDER_INVESTIGATION' ? 'text-warning' : 'text-success'} />}
-                </div>
-                <div className="flex-1">
-                  <p className="text-2xl font-bold text-text-primary">{config?.title}</p>
-                  <p className="text-text-secondary mt-1">{config?.subtitle}</p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
-                <div className="bg-bg-primary/80 p-4 rounded-2xl border border-border-color">
-                  <p className="text-xs uppercase tracking-wider text-text-secondary font-bold">Batch Number</p>
-                  <p className="text-lg font-semibold text-text-primary mt-1">{verification?.batchNumber}</p>
-                </div>
-                <div className="bg-bg-primary/80 p-4 rounded-2xl border border-border-color">
-                  <p className="text-xs uppercase tracking-wider text-text-secondary font-bold">Status</p>
-                  <p className="text-lg font-semibold text-text-primary mt-1">{verification?.status}</p>
-                </div>
-                {verification?.medicine && (
-                  <div className="bg-bg-primary/80 p-4 rounded-2xl border border-border-color md:col-span-2">
-                    <p className="text-xs uppercase tracking-wider text-text-secondary font-bold">Medicine</p>
-                    <p className="text-lg font-semibold text-text-primary mt-1">{verification.medicine}</p>
-                  </div>
-                )}
-                {verification?.manufacturer && (
-                  <div className="bg-bg-primary/80 p-4 rounded-2xl border border-border-color md:col-span-2">
-                    <p className="text-xs uppercase tracking-wider text-text-secondary font-bold">Manufacturer</p>
-                    <p className="text-lg font-semibold text-text-primary mt-1">{verification.manufacturer}</p>
-                  </div>
-                )}
-              </div>
-
-              <div className="mt-6 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-200">
-                <p className="font-semibold">{verification?.message}</p>
-                {verification?.safetyNote && <p className="text-sm mt-2 text-amber-100/90">{verification.safetyNote}</p>}
-                {verification?.action && <p className="text-sm mt-2 text-amber-100/90">{verification.action}</p>}
-              </div>
-
-              <div className="flex flex-col md:flex-row gap-3 mt-6">
-                <button
-                  onClick={() => {
-                    clearResult();
-                    setBatchNumber('');
-                    setErrors({});
-                    navigate('/batch-verify', { replace: true });
-                  }}
-                  className="btn-primary flex-1"
-                >
-                  Verify Another Batch
-                </button>
-                <button
-                  onClick={() => navigate('/nearby-chemist')}
-                  className="flex-1 px-6 py-4 rounded-2xl bg-success text-white font-semibold hover:opacity-95 transition-all"
-                >
-                  Find Verified Chemist
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        ) : (
-          <motion.form
-            onSubmit={handleSubmit}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="space-y-6"
-          >
-            {/* Info Alert */}
-            <div className="p-4 rounded-lg bg-primary/10 border border-primary/30 flex gap-3">
-              <AlertCircle className="text-primary flex-shrink-0 mt-0.5" size={20} />
-              <div>
-                <p className="text-primary font-semibold mb-1">How to find batch number</p>
-                <p className="text-primary/80 text-sm">
-                  Look for "Batch No." or "Lot No." printed on the medicine packet. It's usually a combination of letters and
-                  numbers.
-                </p>
-              </div>
-            </div>
-
-            {/* Batch Number Input */}
-            <label className="block">
-              <span className="text-text-secondary text-sm mb-2 block font-semibold">Batch Number *</span>
-              <input
-                type="text"
-                value={batchNumber}
-                onChange={(e) => {
-                  setBatchNumber(e.target.value);
-                  if (errors.batchNumber) setErrors((prev) => ({ ...prev, batchNumber: '' }));
-                }}
-                placeholder="e.g., BAY2024001 or 123456AB"
-                className="input-field"
-              />
-              {errors.batchNumber && <p className="text-danger text-sm mt-2">{errors.batchNumber}</p>}
+      {/* Input Section */}
+      <div style={{
+        background: 'var(--bg-card, #111827)',
+        border: '1px solid var(--border, #1F2937)',
+        borderRadius: '20px',
+        padding: '32px',
+        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
+      }}>
+        <form onSubmit={handleVerify} style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: '240px' }}>
+            <label style={{ display: 'block', fontSize: '12px', color: '#9CA3AF', fontWeight: '600', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Enter Batch Number
             </label>
+            <input
+              type="text"
+              value={batchNumber}
+              onChange={(e) => setBatchNumber(e.target.value.toUpperCase())}
+              placeholder="e.g., BN2024KL001"
+              style={{
+                width: '100%',
+                padding: '14px 18px',
+                background: 'var(--bg-primary, #030712)',
+                border: '1px solid var(--border, #1F2937)',
+                borderRadius: '12px',
+                color: 'white',
+                fontSize: '16px',
+                fontWeight: '600',
+                outline: 'none',
+                transition: 'border-color 0.2s'
+              }}
+              onFocus={(e) => e.target.style.borderColor = '#00B4D8'}
+              onBlur={(e) => e.target.style.borderColor = 'var(--border)'}
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={loading || !batchNumber.trim()}
+            style={{
+              padding: '0 24px',
+              height: '52px',
+              marginTop: '25px',
+              background: 'linear-gradient(135deg, #00B4D8, #0077B6)',
+              border: 'none',
+              borderRadius: '12px',
+              color: 'white',
+              fontSize: '15px',
+              fontWeight: '700',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              transition: 'transform 0.2s',
+              opacity: (loading || !batchNumber.trim()) ? 0.6 : 1
+            }}
+            onMouseOver={(e) => !loading && (e.target.style.transform = 'translateY(-2px)')}
+            onMouseOut={(e) => e.target.style.transform = 'translateY(0)'}
+          >
+            {loading ? 'Verifying...' : 'Check Status'}
+            {!loading && <span>🔍</span>}
+          </button>
+        </form>
 
-            {/* Verify Button */}
-            <motion.button
-              type="submit"
-              disabled={scanning}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              className="btn-primary w-full text-lg py-4"
-            >
-              {scanning ? (
-                <span className="flex items-center justify-center gap-2">
-                  <div className="w-5 h-5 border-2 border-bg-primary border-t-transparent rounded-full animate-spin"></div>
-                  Verifying...
-                </span>
-              ) : (
-                <span className="flex items-center justify-center gap-2">
-                  <Check size={20} />
-                  Verify Now
-                </span>
-              )}
-            </motion.button>
+        <p style={{ marginTop: '16px', fontSize: '12px', color: '#6B7280', display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <span>ℹ️</span> Batch numbers are usually printed on the side or back of the medicine packaging.
+        </p>
+      </div>
 
-            {/* Loading State */}
-            {scanning && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="p-6 rounded-lg bg-bg-secondary border border-primary/30 space-y-4"
-              >
-                <p className="text-text-primary font-semibold">Verifying batch information...</p>
-                <div className="w-full bg-bg-primary rounded-full h-2 overflow-hidden">
-                  <motion.div
-                    className="h-full bg-gradient-to-r from-primary to-secondary"
-                    initial={{ width: 0 }}
-                    animate={{ width: '100%' }}
-                    transition={{ duration: 2, ease: 'easeInOut' }}
-                  />
+      {/* Result Section */}
+      <div style={{ marginTop: '24px' }}>
+        {error && (
+          <div style={{
+            background: 'rgba(239,35,60,0.1)',
+            border: '1px solid rgba(239,35,60,0.3)',
+            borderRadius: '12px',
+            padding: '16px',
+            color: '#EF233C',
+            fontSize: '14px',
+            textAlign: 'center'
+          }}>
+            ❌ {error}
+          </div>
+        )}
+
+        {result && (
+          <div style={{
+            animation: 'fadeIn 0.4s ease-out'
+          }}>
+            {result.status === 'RECALLED' ? (
+              <div style={{
+                background: severityConfig[result.severity]?.bg || 'rgba(239,35,60,0.1)',
+                border: `1px solid ${severityConfig[result.severity]?.border || 'rgba(239,35,60,0.3)'}`,
+                borderRadius: '20px',
+                padding: '32px',
+                textAlign: 'center'
+              }}>
+                <div style={{ fontSize: '48px', marginBottom: '16px' }}>{severityConfig[result.severity]?.icon || '🚨'}</div>
+                <h2 style={{ color: severityConfig[result.severity]?.color || '#EF233C', fontSize: '24px', fontWeight: '800', marginBottom: '8px' }}>
+                  {severityConfig[result.severity]?.label || 'RECALLED MEDICINE'}
+                </h2>
+                <p style={{ color: 'var(--text-primary)', fontSize: '16px', fontWeight: '600', marginBottom: '24px' }}>
+                  Batch {result.batchNumber} has been officially RECALLED.
+                </p>
+
+                <div style={{ 
+                  background: 'rgba(255,255,255,0.05)', 
+                  borderRadius: '12px', 
+                  padding: '20px', 
+                  textAlign: 'left',
+                  marginBottom: '24px'
+                }}>
+                  <div style={{ marginBottom: '12px' }}>
+                    <span style={{ color: '#9CA3AF', fontSize: '12px', textTransform: 'uppercase' }}>Medicine Name</span>
+                    <div style={{ color: 'white', fontWeight: '600' }}>{result.medicine}</div>
+                  </div>
+                  <div style={{ marginBottom: '12px' }}>
+                    <span style={{ color: '#9CA3AF', fontSize: '12px', textTransform: 'uppercase' }}>Reason for Recall</span>
+                    <div style={{ color: 'white', fontWeight: '600' }}>{result.recallReason}</div>
+                  </div>
+                  <div style={{ marginBottom: '12px' }}>
+                    <span style={{ color: '#9CA3AF', fontSize: '12px', textTransform: 'uppercase' }}>Authority</span>
+                    <div style={{ color: 'white', fontWeight: '600' }}>{result.recallAuthority}</div>
+                  </div>
+                  <div>
+                    <span style={{ color: '#9CA3AF', fontSize: '12px', textTransform: 'uppercase' }}>Affected States</span>
+                    <div style={{ color: 'white', fontWeight: '600' }}>{result.affectedStates?.join(', ')}</div>
+                  </div>
                 </div>
-              </motion.div>
-            )}
 
-            {/* Help Text */}
-            <div className="p-4 rounded-lg bg-bg-secondary border border-border-color space-y-2">
-              <p className="text-text-secondary text-sm font-semibold">💡 Tip:</p>
-              <ul className="text-text-secondary text-sm space-y-1">
-                <li>• Not being listed here does not prove the medicine is genuine</li>
-                <li>• Ask the chemist to show the invoice and manufacturer details</li>
-                <li>• When in doubt, call CDSCO helpline 1800-180-3024</li>
-              </ul>
-            </div>
-          </motion.form>
+                <div style={{ color: '#EF233C', fontWeight: '700', fontSize: '14px', padding: '12px', border: '1px dashed #EF233C', borderRadius: '8px' }}>
+                  ⚠️ DO NOT CONSUME THIS MEDICINE. Return it to the medical store immediately and report to CDSCO.
+                </div>
+              </div>
+            ) : (
+              <div style={{
+                background: 'rgba(6,214,160,0.1)',
+                border: '1px solid rgba(6,214,160,0.3)',
+                borderRadius: '20px',
+                padding: '40px',
+                textAlign: 'center'
+              }}>
+                <div style={{ fontSize: '48px', marginBottom: '16px' }}>✅</div>
+                <h2 style={{ color: '#06D6A0', fontSize: '24px', fontWeight: '800', marginBottom: '8px' }}>
+                  NOT IN RECALLED LIST
+                </h2>
+                <p style={{ color: '#9CA3AF', fontSize: '15px', lineHeight: '1.6' }}>
+                  The batch number <strong style={{ color: 'white' }}>{batchNumber}</strong> is not present in our database of recalled or substandard medicines.
+                </p>
+                <div style={{ marginTop: '24px', padding: '12px', background: 'rgba(255,255,255,0.05)', borderRadius: '12px', fontSize: '12px', color: '#6B7280' }}>
+                  Note: This only means the batch is not flagged in the latest CDSCO alerts. Please also use our AI Packaging Scanner to check for visual counterfeiting signs.
+                </div>
+              </div>
+            )}
+          </div>
         )}
       </div>
-    </div>
-  );
-};
 
-export default BatchVerify;
+      <style>{`
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
+    </div>
+  )
+}

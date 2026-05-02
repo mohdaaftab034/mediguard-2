@@ -1,83 +1,160 @@
 import BatchNumber from '../models/BatchNumber.model.js'
-import { ApiError, ApiResponse } from '../utils/apiResponse.js'
 import { asyncHandler } from '../utils/asyncHandler.js'
+import { ApiResponse, ApiError } from '../utils/apiResponse.js'
 
-export const verifyBatch = asyncHandler(async (req, res, next) => {
-  const batchNumber = req.query.batch?.trim().toUpperCase() || req.query.batchNumber?.trim().toUpperCase()
+// In-memory Map for O(1) batch lookup
+// Loaded once on server start, refreshed every 30 minutes
+let batchMap = new Map()
+let lastMapLoad = null
+const MAP_TTL = 30 * 60 * 1000 // 30 minutes
 
-  if (!batchNumber || batchNumber.length < 3) {
+export const loadBatchMap = async () => {
+  console.log('[BATCH MAP] Loading recalled batches into memory...')
+  try {
+    const recalled = await BatchNumber.find({ 
+      status: { $in: ['RECALLED', 'UNDER_INVESTIGATION'] } 
+    }).lean()
+    
+    const newMap = new Map()
+    
+    recalled.forEach(batch => {
+      // Store with multiple key formats for flexible matching
+      const keys = [
+        batch.batchNumber,                           // Exact: "BNE2401001"
+        batch.batchNumber.replace(/[-\/\s]/g, ''),   // No separators: "BNE2401001"
+        batch.batchNumber.toLowerCase(),              // Lowercase: "bne2401001"
+        batch.batchNumber.replace(/[-\/\s]/g, '').toLowerCase() // Both
+      ]
+      
+      keys.forEach(key => {
+        if (key) newMap.set(key, batch)
+      })
+    })
+    
+    batchMap = newMap
+    lastMapLoad = Date.now()
+    console.log(`[BATCH MAP] Loaded ${recalled.length} recalled batches into Map (${batchMap.size} keys)`)
+  } catch (error) {
+    console.error('[BATCH MAP] Failed to load batch map:', error)
+  }
+}
+
+// Normalize batch number for consistent lookup
+const normalizeBatch = (input) => {
+  if (!input) return ''
+  return input
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, '')
+}
+
+// O(1) Map lookup with fallback to DB
+export const findBatchInMap = (batchNumber) => {
+  const normalized = normalizeBatch(batchNumber)
+  const noSep = normalized.replace(/[-\/]/g, '')
+  
+  return (
+    batchMap.get(normalized) ||
+    batchMap.get(noSep) ||
+    batchMap.get(normalized.toLowerCase()) ||
+    batchMap.get(noSep.toLowerCase()) ||
+    null
+  )
+}
+
+export const verifyBatch = asyncHandler(async (req, res) => {
+  const rawBatch = req.query.batchNumber || req.query.batch // Support both query params
+
+  if (!rawBatch || String(rawBatch).trim().length < 3) {
     throw new ApiError(400, 'Please enter a valid batch number')
   }
 
-  const found = await BatchNumber.findOne({ batchNumber })
+  const batchNumber = normalizeBatch(String(rawBatch))
+  console.log(`[BATCH] Verifying: ${batchNumber}`)
 
-  if (!found) {
+  // Step 1: O(1) Map lookup for recalled batches
+  const mapResult = findBatchInMap(batchNumber)
+
+  if (mapResult) {
+    console.log(`[BATCH] Found in Map: ${mapResult.status}`)
     return res.json(new ApiResponse(200, {
-      batchNumber,
-      status: 'NOT_LISTED',
-      message: 'This batch number is not in our recalled medicines database.',
-      safetyNote: 'Not being in our database does NOT mean this medicine is genuine. Our database contains only recalled medicines reported by CDSCO and state drug authorities. Always verify by contacting the manufacturer directly.',
+      batchNumber: mapResult.batchNumber,
+      status: mapResult.status,
+      medicine: mapResult.medicine,
+      manufacturer: mapResult.manufacturer,
+      recallDate: mapResult.recallDate,
+      recallReason: mapResult.recallReason,
+      recallAuthority: mapResult.recallAuthority,
+      severity: mapResult.severity,
+      affectedStates: mapResult.affectedStates,
+      message: mapResult.status === 'RECALLED'
+        ? 'DANGER: This batch has been officially recalled by drug authorities.'
+        : 'This batch is currently under investigation.',
+      action: mapResult.status === 'RECALLED'
+        ? 'Do NOT consume. Return to chemist immediately. Contact CDSCO: 1800-180-3024'
+        : 'Avoid using until investigation is complete.',
       helpline: '1800-180-3024',
-      cdscoUrl: 'https://cdsco.gov.in'
+      source: 'in-memory-map'
     }))
   }
 
-  if (found.status === 'RECALLED') {
+  // Step 2: DB lookup with index for anything not in Map
+  const dbResult = await BatchNumber.findOne({ batchNumber }).lean()
+
+  if (dbResult) {
     return res.json(new ApiResponse(200, {
-      batchNumber,
-      status: 'RECALLED',
-      medicine: found.medicine,
-      manufacturer: found.manufacturer,
-      recallDate: found.recallDate,
-      recallReason: found.recallReason,
-      recallAuthority: found.recallAuthority,
-      severity: found.severity,
-      affectedStates: found.affectedStates,
-      message: 'DANGER: This batch has been officially recalled.',
-      action: 'Do NOT consume this medicine. Return it to the chemist immediately and report to CDSCO.',
+      batchNumber: dbResult.batchNumber,
+      status: dbResult.status,
+      medicine: dbResult.medicine,
+      manufacturer: dbResult.manufacturer,
+      message: 'Found in database.',
       helpline: '1800-180-3024'
     }))
   }
 
+  // Step 3: Not found anywhere
+  console.log(`[BATCH] Not found: ${batchNumber}`)
   return res.json(new ApiResponse(200, {
     batchNumber,
-    status: found.status,
-    medicine: found.medicine,
-    message: 'This batch is under investigation by drug authorities.',
-    helpline: '1800-180-3024'
+    status: 'NOT_IN_RECALLED_LIST',
+    message: 'This batch is not in our recalled medicines database.',
+    safetyNote: 'Not being in our database does NOT mean this medicine is genuine. Our database contains only officially recalled batches reported by CDSCO.',
+    helpline: '1800-180-3024',
+    cdscoUrl: 'https://cdsco.gov.in'
   }))
 })
 
-export const addBatch = asyncHandler(async (req, res, next) => {
+// Admin route to manually refresh the Map
+export const refreshBatchMap = asyncHandler(async (req, res) => {
+  await loadBatchMap()
+  return res.json(new ApiResponse(200, {
+    message: 'Batch map refreshed',
+    totalKeys: batchMap.size
+  }))
+})
+
+export const addBatch = asyncHandler(async (req, res) => {
   const batch = await BatchNumber.create(req.body)
-  res.status(201).json(new ApiResponse(201, batch, 'Batch added successfully'))
+  await loadBatchMap() // Refresh map after adding
+  return res.status(201).json(new ApiResponse(201, batch, 'Batch added'))
 })
 
-export const updateBatchStatus = asyncHandler(async (req, res, next) => {
-  const { status, recallReason } = req.body
-  const batch = await BatchNumber.findByIdAndUpdate(
-    req.params.id,
-    { status, recallReason, recallDate: status === 'RECALLED' ? new Date() : undefined },
-    { new: true, runValidators: true }
-  )
-  if (!batch) return next(new ApiError(404, 'Batch not found'))
-  res.status(200).json(new ApiResponse(200, batch, 'Batch status updated'))
+export const updateBatchStatus = asyncHandler(async (req, res) => {
+  const batch = await BatchNumber.findByIdAndUpdate(req.params.id, req.body, { new: true })
+  await loadBatchMap()
+  return res.json(new ApiResponse(200, batch, 'Batch status updated'))
 })
 
-export const bulkImportBatches = asyncHandler(async (req, res, next) => {
-  const { batches } = req.body // Expecting an array of batch objects
-  if (!batches || !Array.isArray(batches)) return next(new ApiError(400, 'Invalid data format'))
-
-  const result = await BatchNumber.insertMany(batches, { ordered: false }) // ordered: false to continue on duplicate keys
-  
-  res.status(201).json(new ApiResponse(201, { importedCount: result.length }, 'Bulk import successful'))
+export const bulkImportBatches = asyncHandler(async (req, res) => {
+  const batches = await BatchNumber.insertMany(req.body)
+  await loadBatchMap()
+  return res.json(new ApiResponse(200, batches, 'Batches imported'))
 })
 
-export const getRecalledBatches = asyncHandler(async (req, res, next) => {
-  const { state } = req.query
-  const query = { status: 'RECALLED' }
-  if (state) query.affectedStates = state
-
-  const batches = await BatchNumber.find(query).sort({ recallDate: -1 })
-  res.status(200).json(new ApiResponse(200, batches, 'Recalled batches fetched'))
+export const getRecalledBatches = asyncHandler(async (req, res) => {
+  const batches = await BatchNumber.find({ status: { $in: ['RECALLED', 'UNDER_INVESTIGATION'] } }).sort({ createdAt: -1 })
+  return res.json(new ApiResponse(200, batches, 'Recalled batches fetched'))
 })
+
+// Initialize the interval refresh
+setInterval(loadBatchMap, MAP_TTL)

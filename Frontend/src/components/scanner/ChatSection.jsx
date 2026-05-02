@@ -1,19 +1,103 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Bot, User, Sparkles, Paperclip, Shield } from 'lucide-react';
+import { Send, Bot, User, Sparkles, Paperclip, Shield, Trash2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { motion, AnimatePresence } from 'framer-motion';
 import AnalysisReportCard from './AnalysisReportCard';
+import FullReportCard from './FullReportCard';
+import ChatMessageBubble from './ChatMessageBubble';
 
-const ChatSection = ({ messages, onSendMessage, isTyping, hasAnalyzed }) => {
+const PipelineProgress = ({ currentStep, stepResults, steps }) => (
+  <div style={{ padding: '8px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+    {steps.map((step, index) => {
+      const stepNum = index + 1
+      const isDone = currentStep > stepNum
+      const isActive = currentStep === stepNum
+      const isPending = currentStep < stepNum
+
+      return (
+        <motion.div 
+          key={step.id} 
+          initial={{ opacity: 0, x: -10 }}
+          animate={{ opacity: 1, x: 0 }}
+          style={{
+            display: 'flex', alignItems: 'center', gap: '12px',
+            padding: '10px 14px',
+            borderRadius: '10px',
+            background: isDone ? 'rgba(6,214,160,0.08)'
+              : isActive ? 'rgba(0,180,216,0.08)'
+              : 'rgba(255,255,255,0.02)',
+            border: `1px solid ${isDone ? 'rgba(6,214,160,0.2)' 
+              : isActive ? 'rgba(0,180,216,0.3)' 
+              : 'rgba(255,255,255,0.06)'}`,
+            transition: 'all 0.3s ease'
+          }}
+        >
+          <div style={{
+            width: '32px', height: '32px',
+            borderRadius: '50%',
+            background: isDone ? '#06D6A0' : isActive ? '#00B4D8' : 'rgba(255,255,255,0.1)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: isDone ? '14px' : '16px',
+            flexShrink: 0
+          }}>
+            {isDone ? '✓' : isActive ? (
+              <div style={{
+                width: '14px', height: '14px',
+                border: '2px solid white',
+                borderTopColor: 'transparent',
+                borderRadius: '50%',
+                animation: 'spin 0.8s linear infinite'
+              }} />
+            ) : step.icon}
+          </div>
+
+          <div style={{ flex: 1 }}>
+            <div style={{
+              color: isDone ? '#06D6A0' : isActive ? '#00B4D8' : '#6B7280',
+              fontWeight: '600', fontSize: '13px'
+            }}>
+              {step.label}
+            </div>
+            {isActive && (
+              <div style={{ color: '#9CA3AF', fontSize: '11px', marginTop: '2px' }}>
+                {step.description}
+              </div>
+            )}
+            {isDone && stepResults[stepNum] && (
+              <div style={{ color: '#9CA3AF', fontSize: '11px', marginTop: '2px' }}>
+                {stepResults[stepNum].summary}
+              </div>
+            )}
+          </div>
+
+          {isDone && stepResults[stepNum] && (
+            <span style={{
+              padding: '2px 8px',
+              borderRadius: '20px',
+              fontSize: '11px',
+              fontWeight: '600',
+              background: stepResults[stepNum].alert ? 'rgba(239,35,60,0.15)' : 'rgba(6,214,160,0.15)',
+              color: stepResults[stepNum].alert ? '#EF233C' : '#06D6A0'
+            }}>
+              {stepResults[stepNum].badge}
+            </span>
+          )}
+        </motion.div>
+      )
+    })}
+    <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+  </div>
+)
+
+const ChatSection = ({ messages, onSendMessage, isTyping, hasAnalyzed, onClearHistory, currentStep, stepResults, pipelineSteps }) => {
   const [input, setInput] = useState('');
   const scrollRef = useRef(null);
-  const analysisDisclaimer = 'Note: This is an AI analysis based on visual packaging inspection only. For critical medical decisions, always consult a licensed pharmacist or doctor. MediGuard is not responsible for misidentification.';
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages, isTyping]);
+  }, [messages, isTyping, currentStep]);
 
   const handleSend = () => {
     if (input.trim() && !isTyping) {
@@ -45,6 +129,13 @@ const ChatSection = ({ messages, onSendMessage, isTyping, hasAnalyzed }) => {
             </div>
           </div>
         </div>
+        <button 
+          onClick={onClearHistory}
+          className="p-2 hover:bg-danger/10 text-text-secondary hover:text-danger rounded-lg transition-all"
+          title="Clear History"
+        >
+          <Trash2 size={18} />
+        </button>
       </div>
 
       {/* Messages */}
@@ -65,7 +156,7 @@ const ChatSection = ({ messages, onSendMessage, isTyping, hasAnalyzed }) => {
             </div>
           ) : (
             messages.map((msg) => {
-              if (msg.isSeparator) {
+              if (msg.type === 'separator' || msg.isSeparator) {
                 return (
                   <motion.div
                     key={msg.id}
@@ -81,52 +172,31 @@ const ChatSection = ({ messages, onSendMessage, isTyping, hasAnalyzed }) => {
                   </motion.div>
                 );
               }
-              return (
-                <motion.div
-                  key={msg.id}
-                  initial={{ opacity: 0, y: 10, x: msg.role === 'user' ? 20 : -20 }}
-                  animate={{ opacity: 1, y: 0, x: 0 }}
-                  className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                >
-                  <div className={`flex gap-3 max-w-[85%] ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-                    <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${
-                      msg.role === 'user' ? 'bg-primary text-white' : 'bg-bg-secondary border border-border-color text-primary'
-                    }`}>
-                      {msg.role === 'user' ? 'U' : <Shield size={14} />}
-                    </div>
-                    <div className="space-y-1">
-                      <p className={`text-[10px] font-bold text-text-secondary uppercase tracking-tighter ${msg.role === 'user' ? 'text-right' : 'text-left'}`}>
-                        {msg.role === 'user' ? 'You' : 'MediGuard AI'}
-                      </p>
-                      <div className={`p-4 rounded-2xl shadow-sm ${
-                        msg.role === 'user' 
-                          ? 'bg-gradient-to-br from-primary to-primary-dark text-white rounded-tr-none' 
-                          : msg.isWarning 
-                            ? 'bg-warning/10 border-l-4 border-warning text-text-primary rounded-tl-none'
-                            : msg.isAnalysis 
-                              ? 'bg-transparent border-none p-0 max-w-none'
-                              : 'bg-bg-secondary border-l-4 border-primary text-text-primary rounded-tl-none prose max-w-none'
-                      }`}>
-                        {msg.role === 'ai' ? (
-                          msg.isAnalysis ? (
-                            <AnalysisReportCard 
-                              text={msg.content} 
-                              status={msg.status} 
-                              confidence={msg.confidence} 
-                            />
-                          ) : (
-                            <ReactMarkdown>{msg.content}</ReactMarkdown>
-                          )
-                        ) : (
-                          <p className="whitespace-pre-wrap">{msg.content}</p>
-                        )}
-                      </div>
-                      <p className={`text-[9px] text-text-secondary mt-1 ${msg.role === 'user' ? 'text-right' : 'text-left'}`}>
-                        {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </p>
-                    </div>
+
+              if (msg.type === 'pipeline_progress') {
+                return (
+                  <div key={msg.id} className="w-full">
+                    <p className="text-[10px] font-bold text-text-secondary uppercase tracking-tighter mb-2">Analysis Progress</p>
+                    <PipelineProgress 
+                      currentStep={currentStep} 
+                      stepResults={stepResults} 
+                      steps={pipelineSteps} 
+                    />
                   </div>
-                </motion.div>
+                );
+              }
+
+              if (msg.type === 'full_report') {
+                return (
+                  <div key={msg.id} className="w-full">
+                    <p className="text-[10px] font-bold text-text-secondary uppercase tracking-tighter mb-2">Complete Scan Report</p>
+                    <FullReportCard pipeline={msg.pipeline} scanId={msg.scanId} />
+                  </div>
+                );
+              }
+
+              return (
+                <ChatMessageBubble key={msg.id} message={msg} />
               );
             })
           )}

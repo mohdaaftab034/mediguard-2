@@ -1,12 +1,13 @@
 export const ROUTES = {
   HOME: '/',
-  SCANNER: '/agent',
-  BATCH_VERIFY: '/database',
-  REPORT_FAKE: '/report',
-  MEDICINE_INFO: '/info',
-  NEARBY_CHEMIST: '/chemists',
-  DASHBOARD: '/dashboard',
+  SCANNER: '/scanner',
+  BATCH_VERIFY: '/batch-verify',
+  REPORT_FAKE: '/report-fake',
+  MEDICINE_INFO: '/medicine-info',
+  NEARBY_CHEMIST: '/nearby-chemist',
+  DASHBOARD: '/dashboard/user',
   ALERTS: '/alerts',
+  SCAN_HISTORY: '/dashboard/history',
   NOT_FOUND: '/404',
 };
 

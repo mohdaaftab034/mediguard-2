@@ -10,7 +10,7 @@ const createTransporter = () => {
       pass: process.env.EMAIL_PASS
     }
   })
-}
+} 
 
 export const sendWelcomeEmail = async (user) => {
   try {
