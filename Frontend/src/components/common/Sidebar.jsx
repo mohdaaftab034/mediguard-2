@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Shield, LayoutDashboard, Database, MapPin, Bell, MessageSquare, LogOut, History } from 'lucide-react';
+import { Shield, LayoutDashboard, Database, MapPin, Bell, MessageSquare, LogOut, History, User } from 'lucide-react';
 import { ROUTES } from '../../utils/constants.js';
 import { useContext } from 'react';
 import { ThemeContext } from '../../context/ThemeContext.jsx';
@@ -13,6 +13,7 @@ const Sidebar = () => {
     { path: ROUTES.NEARBY_CHEMIST, icon: MapPin, label: 'Find Chemist' },
     { path: ROUTES.SCAN_HISTORY, icon: History, label: 'Scan History' },
     { path: ROUTES.ALERTS, icon: Bell, label: 'Alerts' },
+    { path: '/profile', icon: User, label: 'My Profile' },
   ];
 
   const location = useLocation();

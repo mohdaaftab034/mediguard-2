@@ -23,22 +23,23 @@ const PipelineProgress = ({ currentStep, stepResults, steps }) => (
             display: 'flex', alignItems: 'center', gap: '12px',
             padding: '10px 14px',
             borderRadius: '10px',
-            background: isDone ? 'rgba(6,214,160,0.08)'
-              : isActive ? 'rgba(0,180,216,0.08)'
-              : 'rgba(255,255,255,0.02)',
-            border: `1px solid ${isDone ? 'rgba(6,214,160,0.2)' 
-              : isActive ? 'rgba(0,180,216,0.3)' 
-              : 'rgba(255,255,255,0.06)'}`,
+            background: isDone ? 'rgba(var(--success-rgb), 0.1)'
+              : isActive ? 'rgba(var(--primary-rgb), 0.1)'
+              : 'rgba(var(--text-secondary-rgb), 0.05)',
+            border: `1px solid ${isDone ? 'rgba(var(--success-rgb), 0.3)' 
+              : isActive ? 'rgba(var(--primary-rgb), 0.4)' 
+              : 'rgba(var(--border-color-rgb), 0.1)'}`,
             transition: 'all 0.3s ease'
           }}
         >
           <div style={{
             width: '32px', height: '32px',
             borderRadius: '50%',
-            background: isDone ? '#06D6A0' : isActive ? '#00B4D8' : 'rgba(255,255,255,0.1)',
+            background: isDone ? 'var(--success)' : isActive ? 'var(--primary)' : 'rgba(var(--text-secondary-rgb), 0.1)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontSize: isDone ? '14px' : '16px',
-            flexShrink: 0
+            flexShrink: 0,
+            color: 'white'
           }}>
             {isDone ? '✓' : isActive ? (
               <div style={{
@@ -53,7 +54,7 @@ const PipelineProgress = ({ currentStep, stepResults, steps }) => (
 
           <div style={{ flex: 1 }}>
             <div style={{
-              color: isDone ? '#06D6A0' : isActive ? '#00B4D8' : '#6B7280',
+              color: isDone ? 'var(--success)' : isActive ? 'var(--primary)' : 'var(--text-secondary)',
               fontWeight: '600', fontSize: '13px'
             }}>
               {step.label}

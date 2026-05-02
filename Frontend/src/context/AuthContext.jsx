@@ -5,15 +5,18 @@ export const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
+  const [chemist, setChemist] = useState(null);
   const [loading, setLoading] = useState(true);
 
   const API_URL = `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api/v1'}/auth`;
 
   useEffect(() => {
     const savedUser = localStorage.getItem('mediguard-user');
+    const savedChemist = localStorage.getItem('mediguard-chemist');
     const token = localStorage.getItem('mediguard-token');
     if (savedUser && token) {
       setUser(JSON.parse(savedUser));
+      if (savedChemist) setChemist(JSON.parse(savedChemist));
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
     }
     setLoading(false);
@@ -23,13 +26,15 @@ export const AuthProvider = ({ children }) => {
     try {
       const response = await axios.post(`${API_URL}/login`, { email, password });
       if (response.data.success) {
-        const { user, accessToken } = response.data.data;
+        const { user, chemist, accessToken } = response.data.data;
         setUser(user);
+        setChemist(chemist);
         localStorage.setItem('mediguard-user', JSON.stringify(user));
+        if (chemist) localStorage.setItem('mediguard-chemist', JSON.stringify(chemist));
         localStorage.setItem('mediguard-token', accessToken);
         localStorage.setItem('token', accessToken);
         axios.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
-        return { success: true };
+        return { success: true, user };
       }
     } catch (error) {
       return { success: false, error: error.response?.data?.message || 'Login failed' };
@@ -38,22 +43,13 @@ export const AuthProvider = ({ children }) => {
 
   const register = async (formData) => {
     try {
-      // Provide dummy data for required fields that the frontend form doesn't collect
-      const submitData = {
-        ...formData,
-        phone: formData.phone || '0000000000',
-        city: formData.city || 'Unknown City',
-        state: formData.state || 'Unknown State',
-        shopName: formData.shopName || `${formData.name}'s Pharmacy`,
-        address: formData.address || '123 Main St',
-        pincode: formData.pincode || '000000',
-      };
-      
-      const response = await axios.post(`${API_URL}/register`, submitData);
+      const response = await axios.post(`${API_URL}/register`, formData);
       if (response.data.success) {
-        const { user, accessToken } = response.data.data;
+        const { user, chemist, accessToken } = response.data.data;
         setUser(user);
+        setChemist(chemist);
         localStorage.setItem('mediguard-user', JSON.stringify(user));
+        if (chemist) localStorage.setItem('mediguard-chemist', JSON.stringify(chemist));
         localStorage.setItem('mediguard-token', accessToken);
         localStorage.setItem('token', accessToken);
         axios.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
@@ -71,7 +67,9 @@ export const AuthProvider = ({ children }) => {
       console.log('Logout error', err);
     } finally {
       setUser(null);
+      setChemist(null);
       localStorage.removeItem('mediguard-user');
+      localStorage.removeItem('mediguard-chemist');
       localStorage.removeItem('mediguard-token');
       localStorage.removeItem('token');
       delete axios.defaults.headers.common['Authorization'];
@@ -79,7 +77,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, chemist, loading, login, register, logout }}>
       {children}
     </AuthContext.Provider>
   );

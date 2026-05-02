@@ -3,14 +3,39 @@ import { motion } from 'framer-motion';
 import { Store, CheckCircle, AlertTriangle, TrendingUp } from 'lucide-react';
 import { AuthContext } from '../../context/AuthContext.jsx';
 import { AppContext } from '../../context/AppContext.jsx';
+import api from '../../services/api.js';
 import { recalledBatches, genuineBatches, REPORTS } from '../../utils/mockData.js';
 import toast from 'react-hot-toast';
 
 const ChemistDashboard = () => {
   const { user } = useContext(AuthContext);
   const { recentReports } = useContext(AppContext);
+  const [stats, setStats] = useState({ rating: 0, isVerified: false, inventoryVerified: 0, reportsAgainstShop: 0, customerScans: 0 });
+  const [loading, setLoading] = useState(true);
   const [batchInput, setBatchInput] = useState('');
   const [batchResult, setBatchResult] = useState(null);
+
+  useEffect(() => {
+    fetchChemistData();
+  }, []);
+
+  const fetchChemistData = async () => {
+    try {
+      setLoading(true);
+      const res = await api.get('/dashboard/chemist');
+      const { shopStats, inventoryVerified, reportsAgainstShop, customerScans } = res.data.data;
+      setStats({
+        ...shopStats,
+        inventoryVerified,
+        reportsAgainstShop,
+        customerScans
+      });
+    } catch (error) {
+      toast.error('Failed to load chemist dashboard');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleBatchVerify = () => {
     if (!batchInput) {
@@ -72,14 +97,29 @@ const ChemistDashboard = () => {
             <div>
               <h2 className="text-2xl font-bold text-text-primary mb-2 flex items-center gap-2">
                 <Store className="w-6 h-6 text-primary" />
-                {user?.name || 'Pharmacy'}
+                {user?.shopName || user?.name || 'Pharmacy'}
               </h2>
-              <p className="text-text-secondary mb-3">License: {user?.licenseNumber}</p>
-              <span className="inline-block px-4 py-2 rounded-full bg-success/20 text-success font-semibold text-sm">
-                {user?.isVerified ? '✓ Verified Seller' : 'Pending Verification'}
+              <div className="flex items-center gap-4 mb-3">
+                <p className="text-text-secondary text-sm">License: {user?.licenseNumber || 'N/A'}</p>
+                <div className="flex items-center gap-1 text-warning">
+                  <span className="font-bold">{stats.rating || '5.0'}</span>
+                  <div className="flex">
+                    {[1, 2, 3, 4, 5].map(star => (
+                      <TrendingUp key={star} size={12} className={star <= (stats.rating || 5) ? 'fill-current' : 'opacity-30'} />
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <span className={`inline-block px-4 py-1 rounded-full font-bold text-xs ${
+                stats.isVerified ? 'bg-success/10 text-success border border-success/20' : 'bg-warning/10 text-warning border border-warning/20'
+              }`}>
+                {stats.isVerified ? '✓ Verified Seller' : 'Pending Verification'}
               </span>
             </div>
-            <TrendingUp className="w-8 h-8 text-primary" />
+            <div className="text-right">
+               <p className="text-3xl font-black text-primary">{stats.customerScans || 0}</p>
+               <p className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Customer Scans</p>
+            </div>
           </div>
         </motion.div>
 

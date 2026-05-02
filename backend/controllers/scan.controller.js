@@ -19,6 +19,17 @@ export const chatAboutMedicine = asyncHandler(async (req, res) => {
 
   const GEMINI_API_KEY = process.env.GEMINI_API_KEY
 
+  // If Gemini key is missing, fallback to Groq
+  if (!GEMINI_API_KEY) {
+    console.log('[CHAT] Gemini API key missing, falling back to Groq...')
+    const reply = await askGroq(message, conversationHistory, medicineContext)
+    return res.json(new ApiResponse(200, {
+      reply,
+      searchQueries: [],
+      sources: []
+    }, 'Response generated via Groq (Fallback)'))
+  }
+
   // Build medicine context from scan if scanId provided
   let fullContext = medicineContext || ''
   if (scanId && !fullContext) {

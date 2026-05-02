@@ -108,14 +108,20 @@ const Scanner = () => {
   const [isTyping, setIsTyping] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
   const [stepResults, setStepResults] = useState({});
-  const [pipelineComplete, setPipelineComplete] = useState(false);
+  const [pipelineComplete, setPipelineComplete] = useState(() => {
+    return localStorage.getItem('mediguard_scan_complete') === 'true';
+  });
   const [userLocation, setUserLocation] = useState(null);
   const [uploadedImage, setUploadedImage] = useState(null);
-  const [currentScanId, setCurrentScanId] = useState(null);
+  const [currentScanId, setCurrentScanId] = useState(() => {
+    return localStorage.getItem('mediguard_current_scan_id');
+  });
 
   useEffect(() => {
     localStorage.setItem('mediguard_scan_history_messages', JSON.stringify(messages));
-  }, [messages]);
+    localStorage.setItem('mediguard_scan_complete', pipelineComplete);
+    if (currentScanId) localStorage.setItem('mediguard_current_scan_id', currentScanId);
+  }, [messages, pipelineComplete, currentScanId]);
 
   useEffect(() => {
     if (navigator.geolocation) {

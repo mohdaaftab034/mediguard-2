@@ -1,11 +1,29 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../services/api';
+import { fetchFromOverpass, haversineKm } from '../../utils/osm';
 
 const FullReportCard = ({ pipeline }) => {
   const { step1_packaging, step2_batch, step3_medicineDb, step4_chemists: initialChemists, finalRiskLevel, finalVerdict } = pipeline
   const [showChemistModal, setShowChemistModal] = useState(false)
-  const [chemists, setChemists] = useState(initialChemists || [])
+  
+  // Format initialChemists to match the new structure if they exist
+  const formattedInitial = (initialChemists || []).map(c => ({
+    ...c,
+    name: c.shopName || c.name,
+    isVerified: true,
+    source: 'MediGuard',
+    distance: null
+  }));
+  
+  const [chemists, setChemists] = useState(formattedInitial)
   const [isLoadingChemists, setIsLoadingChemists] = useState(false)
+  const [hasFetchedOSM, setHasFetchedOSM] = useState(false)
+
+  useEffect(() => {
+    if (!hasFetchedOSM) {
+      fetchChemists();
+    }
+  }, [hasFetchedOSM]);
 
   // Read directly from structured fields
   const fields = step1_packaging.fields || {}
@@ -20,7 +38,7 @@ const FullReportCard = ({ pipeline }) => {
   const requiresPrescription = fields.requiresPrescription || false
 
   const fetchChemists = async () => {
-    if (chemists.length > 0) {
+    if (hasFetchedOSM) {
       setShowChemistModal(true)
       return
     }
@@ -34,10 +52,21 @@ const FullReportCard = ({ pipeline }) => {
         const { latitude: lat, longitude: lng } = pos.coords
         
         try {
-          const response = await api.get(`/chemists/nearby?lat=${lat}&lng=${lng}`)
-          if (response.data?.data) {
-            setChemists(response.data.data)
-          }
+          const osmPlaces = await fetchFromOverpass(lat, lng, 10000);
+          const response = await api.get(`/chemists/nearby?lat=${lat}&lng=${lng}&radius=10000`)
+          const verified = Array.isArray(response.data?.data) ? response.data.data : [];
+          
+          const formattedVerified = verified.map(v => ({
+            ...v,
+            name: v.shopName,
+            isVerified: true,
+            source: 'MediGuard',
+            distance: v.coordinates?.lat ? haversineKm([lat, lng], [v.coordinates.lat, v.coordinates.lng]) : null
+          }));
+          
+          const combined = [...formattedVerified, ...osmPlaces].sort((a,b) => (a.distance ?? 999) - (b.distance ?? 999));
+          setChemists(combined);
+          setHasFetchedOSM(true);
         } catch (error) {
           console.error('Failed to fetch chemists:', error)
         } finally {
@@ -47,9 +76,9 @@ const FullReportCard = ({ pipeline }) => {
         // Fallback without coordinates
         try {
           const response = await api.get('/chemists/nearby')
-          if (response.data?.data) {
-            setChemists(response.data.data)
-          }
+          const verified = Array.isArray(response.data?.data) ? response.data.data : [];
+          setChemists(verified.map(v => ({...v, name: v.shopName, isVerified: true, source: 'MediGuard'})))
+          setHasFetchedOSM(true);
         } catch (error) {
           console.error('Failed to fetch chemists fallback:', error)
         } finally {
@@ -231,7 +260,9 @@ const FullReportCard = ({ pipeline }) => {
                  <p style={{ fontSize: '12px', color: textSecondary, marginTop: '8px' }}>Searching for chemists...</p>
                </div>
             ) : (chemists.length > 0 ? (
-              chemists.map((chemist, i) => (
+              chemists.map((chemist, i) => {
+                const distanceText = chemist.distance != null ? `${chemist.distance} km` : 'Nearby';
+                return (
                 <div key={i} style={{
                   background: '#FFFFFF',
                   border: `1px solid ${borderLight}`,
@@ -244,15 +275,30 @@ const FullReportCard = ({ pipeline }) => {
                 }}>
                   <div>
                     <div style={{ color: textPrimary, fontWeight: '700', fontSize: '14px' }}>
-                      {chemist.shopName}
+                      {chemist.name}
                     </div>
                     <div style={{ color: textSecondary, fontSize: '12px', marginTop: '2px' }}>
-                      {chemist.address}, {chemist.city}
+                      {chemist.address}
+                      {chemist.city && `, ${chemist.city}`}
                     </div>
+                    {chemist.phone && (
+                      <div style={{ color: textSecondary, fontSize: '11px', marginTop: '2px' }}>
+                        📞 {chemist.phone}
+                      </div>
+                    )}
                     <div style={{ marginTop: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span style={{ color: '#F59E0B' }}>⭐</span>
-                      <span style={{ fontSize: '12px', fontWeight: '700', color: textPrimary }}>{chemist.rating || '4.8'}</span>
-                      <span style={{ color: '#059669', fontSize: '10px', background: '#DCFCE7', padding: '1px 6px', borderRadius: '4px', fontWeight: '700' }}>VERIFIED</span>
+                      {chemist.rating && (
+                        <>
+                          <span style={{ color: '#F59E0B' }}>⭐</span>
+                          <span style={{ fontSize: '12px', fontWeight: '700', color: textPrimary }}>{chemist.rating}</span>
+                        </>
+                      )}
+                      <span style={{ color: '#0369A1', fontSize: '12px', fontWeight: '700' }}>{distanceText}</span>
+                      {chemist.isVerified ? (
+                        <span style={{ color: '#059669', fontSize: '10px', background: '#DCFCE7', padding: '1px 6px', borderRadius: '4px', fontWeight: '700' }}>✅ VERIFIED</span>
+                      ) : (
+                        <span style={{ color: '#4A5568', fontSize: '10px', background: '#E2E8F0', padding: '1px 6px', borderRadius: '4px', fontWeight: '700' }}>{chemist.source || 'OSM'}</span>
+                      )}
                     </div>
                   </div>
                   <button
@@ -275,7 +321,7 @@ const FullReportCard = ({ pipeline }) => {
                     📍 Go
                   </button>
                 </div>
-              ))
+              )})
             ) : (
               <div style={{ textAlign: 'center', padding: '20px', color: textSecondary }}>
                 <div style={{ fontSize: '24px', marginBottom: '8px' }}>📍</div>

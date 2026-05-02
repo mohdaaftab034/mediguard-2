@@ -39,18 +39,19 @@ const ChatMessageBubble = ({ message }) => {
 
         {/* Message bubble */}
         <div style={{
-          background: 'var(--bg-card, #111827)',
-          border: '1px solid var(--border, #1F2937)',
+          background: 'var(--bg-secondary)',
+          border: '1px solid var(--border-color)',
           borderRadius: '4px 18px 18px 18px',
           padding: '14px 16px',
           fontSize: '14px',
           lineHeight: '1.6',
-          color: 'var(--text-primary)'
+          color: 'var(--text-primary)',
+          boxShadow: '0 2px 5px rgba(0,0,0,0.05)'
         }}>
           <ReactMarkdown
             components={{
               strong: ({ children }) => (
-                <strong style={{ color: '#00B4D8', fontWeight: '700' }}>{children}</strong>
+                <strong style={{ color: 'var(--primary)', fontWeight: '700' }}>{children}</strong>
               ),
               ul: ({ children }) => (
                 <ul style={{ paddingLeft: '16px', margin: '8px 0' }}>{children}</ul>

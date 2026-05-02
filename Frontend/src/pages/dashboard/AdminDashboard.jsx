@@ -3,15 +3,36 @@ import { motion } from 'framer-motion';
 import { BarChart3, AlertTriangle, Users, CheckCircle } from 'lucide-react';
 import { AuthContext } from '../../context/AuthContext.jsx';
 import { AppContext } from '../../context/AppContext.jsx';
+import api from '../../services/api.js';
 import { REPORTS, ALERTS, DASHBOARD_STATS } from '../../utils/mockData.js';
 import toast from 'react-hot-toast';
 
 const AdminDashboard = () => {
   const { user } = useContext(AuthContext);
-  const { recentReports } = useContext(AppContext);
+  const [stats, setStats] = useState({ totalUsers: 0, totalChemists: 0, pendingChemists: 0, activeAlerts: 0 });
+  const [reports, setReports] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('reports');
   const [newAlertTitle, setNewAlertTitle] = useState('');
   const [newAlertDesc, setNewAlertDesc] = useState('');
+
+  useEffect(() => {
+    fetchAdminData();
+  }, []);
+
+  const fetchAdminData = async () => {
+    try {
+      setLoading(true);
+      const res = await api.get('/dashboard/admin');
+      const { stats, recentReports } = res.data.data;
+      setStats(stats);
+      setReports(recentReports);
+    } catch (error) {
+      toast.error('Failed to load admin statistics');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleAddAlert = () => {
     if (!newAlertTitle || !newAlertDesc) {
@@ -41,6 +62,8 @@ const AdminDashboard = () => {
     );
   }
 
+  if (loading) return <div className="min-h-screen flex items-center justify-center">Loading Admin Data...</div>;
+
   return (
     <div className="min-h-screen bg-bg-primary py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-7xl mx-auto">
@@ -62,18 +85,18 @@ const AdminDashboard = () => {
           className="grid grid-cols-4 gap-4 mb-8"
         >
           {[
-            { label: 'Total Reports', value: DASHBOARD_STATS.totalReportsThisMonth, color: 'primary' },
-            { label: 'Fake Medicines', value: DASHBOARD_STATS.fakeMedicinesDetected, color: 'danger' },
-            { label: 'Verified Users', value: DASHBOARD_STATS.areasOnAlert * 10, color: 'success' },
-            { label: 'Active Alerts', value: DASHBOARD_STATS.activeAlerts, color: 'warning' },
+            { label: 'Total Users', value: stats.totalUsers, color: 'primary' },
+            { label: 'Total Chemists', value: stats.totalChemists, color: 'success' },
+            { label: 'Pending Verification', value: stats.pendingChemists, color: 'warning' },
+            { label: 'Active Alerts', value: stats.activeAlerts, color: 'danger' },
           ].map((stat, idx) => (
             <motion.div
               key={idx}
               whileHover={{ y: -5 }}
-              className={`bg-bg-secondary border border-border-color rounded-xl p-6 text-center`}
+              className={`bg-bg-secondary border border-border-color rounded-xl p-6 text-center shadow-sm`}
             >
-              <p className="text-text-secondary text-sm mb-2">{stat.label}</p>
-              <p className={`text-3xl font-bold text-${stat.color}`}>{stat.value}</p>
+              <p className="text-text-secondary text-xs font-bold uppercase tracking-wider mb-2">{stat.label}</p>
+              <p className={`text-3xl font-extrabold text-${stat.color}`}>{stat.value}</p>
             </motion.div>
           ))}
         </motion.div>
@@ -115,32 +138,42 @@ const AdminDashboard = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {(recentReports || REPORTS).slice(0, 10).map((report) => (
-                    <tr key={report.id} className="border-b border-border-color/50 hover:bg-bg-primary/50">
-                      <td className="py-4 text-text-primary">{report.id}</td>
-                      <td className="py-4 text-text-primary">{report.medicineName}</td>
-                      <td className="py-4 text-text-secondary">{report.location}</td>
+                  {reports.map((report) => (
+                    <tr key={report._id} className="border-b border-border-color/50 hover:bg-bg-primary/50">
+                      <td className="py-4 text-text-primary text-xs font-mono">{report._id.slice(-6)}</td>
+                      <td className="py-4">
+                        <div className="flex flex-col">
+                          <span className="text-text-primary font-bold">{report.medicineName}</span>
+                          <span className="text-[10px] text-text-secondary">{report.reporter?.name || 'Anonymous'}</span>
+                        </div>
+                      </td>
+                      <td className="py-4 text-text-secondary text-sm">{report.location}</td>
                       <td className="py-4">
                         <span
-                          className={`px-3 py-1 rounded-full text-sm font-semibold ${
+                          className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
                             report.status === 'confirmed'
-                              ? 'bg-danger/20 text-danger'
-                              : 'bg-warning/20 text-warning'
+                              ? 'bg-danger/10 text-danger border border-danger/20'
+                              : 'bg-warning/10 text-warning border border-warning/20'
                           }`}
                         >
-                          {report.status.toUpperCase()}
+                          {report.status}
                         </span>
                       </td>
                       <td className="py-4">
                         <button
-                          onClick={() => handleResolveReport(report.id)}
-                          className="text-primary hover:text-secondary transition-colors text-sm font-semibold"
+                          onClick={() => handleResolveReport(report._id)}
+                          className="px-3 py-1.5 bg-primary/10 text-primary hover:bg-primary hover:text-white rounded-lg transition-all text-xs font-bold"
                         >
                           Resolve
                         </button>
                       </td>
                     </tr>
                   ))}
+                  {reports.length === 0 && (
+                    <tr>
+                      <td colSpan="5" className="py-12 text-center text-text-secondary italic">No recent reports found.</td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>

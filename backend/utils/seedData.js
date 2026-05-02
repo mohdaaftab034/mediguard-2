@@ -20,12 +20,10 @@ export const runSeed = async () => {
     
     let admin = await User.findOne({ email: adminEmail })
     if (!admin) {
-      const salt = await bcrypt.genSalt(10)
-      const hashedPassword = await bcrypt.hash(adminPassword, salt)
       admin = await User.create({
         name: 'Super Admin',
         email: adminEmail,
-        password: hashedPassword,
+        password: adminPassword,
         role: 'admin',
         isVerified: true
       })
@@ -90,12 +88,10 @@ export const runSeed = async () => {
     for (let i = 0; i < 5; i++) {
       let cUser = await User.findOne({ email: `chemist${i}@mediguard.in` })
       if (!cUser) {
-        const salt = await bcrypt.genSalt(10)
-        const hp = await bcrypt.hash('Chemist@123', salt)
         cUser = await User.create({
           name: `Chemist ${i}`,
           email: `chemist${i}@mediguard.in`,
-          password: hp,
+          password: 'Chemist@123',
           role: 'chemist',
           city: cities[i],
           state: cities[i]

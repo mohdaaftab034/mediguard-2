@@ -1,7 +1,7 @@
 import React, { useState, useContext } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { User, Mail, Lock, UserCheck, UserCircle2, Store, Shield } from 'lucide-react';
+import { User, Mail, Lock, UserCheck, UserCircle2, Store, Shield, Phone, MapPin } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { AuthContext } from '../context/AuthContext.jsx';
 
@@ -19,7 +19,13 @@ const Register = () => {
     email: '',
     password: '',
     role: 'public',
+    phone: '',
+    city: '',
+    state: '',
     licenseNumber: '',
+    shopName: '',
+    address: '',
+    pincode: '',
   });
   const [loading, setLoading] = useState(false);
 
@@ -33,24 +39,25 @@ const Register = () => {
     setLoading(true);
 
     try {
-      if (!formData.name || !formData.email || !formData.password) {
-        toast.error('Please fill all required fields');
+      if (!formData.name || !formData.email || !formData.password || !formData.phone || !formData.city || !formData.state) {
+        toast.error('Please fill all required profile fields');
         setLoading(false);
         return;
       }
 
-      if (formData.role === 'chemist' && !formData.licenseNumber) {
-        toast.error('License number is required for chemists');
+      if (formData.role === 'chemist' && (!formData.licenseNumber || !formData.shopName)) {
+        toast.error('License number and Shop name are required for chemists');
         setLoading(false);
         return;
       }
 
       const result = await register(formData);
       if (result.success) {
-        toast.success('Registration successful! Redirecting to login...');
-        setTimeout(() => {
-          navigate('/login');
-        }, 1500);
+        toast.success('Account created! Welcome to MediGuard.');
+        // Immediate navigation to home as requested by user
+        navigate('/');
+      } else {
+        toast.error(result.error || 'Registration failed');
       }
     } catch (error) {
       toast.error('An error occurred during registration');
@@ -113,19 +120,37 @@ const Register = () => {
             </p>
           </div>
 
-          <div>
-            <label className="block text-text-primary font-medium mb-2">Full Name</label>
-            <div className="relative">
-              <User className="absolute left-3 top-3 text-primary w-5 h-5" />
-              <input
-                type="text"
-                name="name"
-                value={formData.name}
-                onChange={handleChange}
-                className="w-full pl-10 pr-4 py-3 rounded-xl bg-bg-primary border border-border-color text-text-primary focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
-                placeholder="Your full name"
-                required
-              />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-text-primary font-medium mb-2">Full Name</label>
+              <div className="relative">
+                <User className="absolute left-3 top-3 text-primary w-5 h-5" />
+                <input
+                  type="text"
+                  name="name"
+                  value={formData.name}
+                  onChange={handleChange}
+                  className="w-full pl-10 pr-4 py-3 rounded-xl bg-bg-primary border border-border-color text-text-primary focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  placeholder="Your full name"
+                  required
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-text-primary font-medium mb-2">Phone Number</label>
+              <div className="relative">
+                <Phone className="absolute left-3 top-3 text-primary w-5 h-5" />
+                <input
+                  type="tel"
+                  name="phone"
+                  value={formData.phone}
+                  onChange={handleChange}
+                  className="w-full pl-10 pr-4 py-3 rounded-xl bg-bg-primary border border-border-color text-text-primary focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  placeholder="+91 00000 00000"
+                  required
+                />
+              </div>
             </div>
           </div>
 
@@ -140,6 +165,37 @@ const Register = () => {
                 onChange={handleChange}
                 className="w-full pl-10 pr-4 py-3 rounded-xl bg-bg-primary border border-border-color text-text-primary focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
                 placeholder="your@email.com"
+                required
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-text-primary font-medium mb-2">City</label>
+              <div className="relative">
+                <MapPin className="absolute left-3 top-3 text-primary w-5 h-5" />
+                <input
+                  type="text"
+                  name="city"
+                  value={formData.city}
+                  onChange={handleChange}
+                  className="w-full pl-10 pr-4 py-3 rounded-xl bg-bg-primary border border-border-color text-text-primary focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  placeholder="e.g. Mumbai"
+                  required
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-text-primary font-medium mb-2">State</label>
+              <input
+                type="text"
+                name="state"
+                value={formData.state}
+                onChange={handleChange}
+                className="w-full px-4 py-3 rounded-xl bg-bg-primary border border-border-color text-text-primary focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+                placeholder="e.g. Maharashtra"
                 required
               />
             </div>
@@ -163,18 +219,72 @@ const Register = () => {
           </div>
 
           {formData.role === 'chemist' && (
-            <div>
-              <label className="block text-text-primary font-medium mb-2">License Number</label>
-              <input
-                type="text"
-                name="licenseNumber"
-                value={formData.licenseNumber}
-                onChange={handleChange}
-                className="w-full px-4 py-3 rounded-xl bg-bg-primary border border-border-color text-text-primary focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
-                placeholder="DL/2024/0001"
-                required
-              />
-            </div>
+            <motion.div 
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              className="space-y-4 pt-2"
+            >
+              <div className="p-4 bg-primary/5 rounded-2xl border border-primary/20">
+                <p className="text-sm font-bold text-primary mb-4 flex items-center gap-2">
+                  <Store size={18} /> Pharmacy Details
+                </p>
+                
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-text-primary text-xs font-bold mb-1 uppercase tracking-wider">Pharmacy Shop Name</label>
+                    <input
+                      type="text"
+                      name="shopName"
+                      value={formData.shopName}
+                      onChange={handleChange}
+                      className="w-full px-4 py-3 rounded-xl bg-bg-primary border border-border-color text-text-primary focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      placeholder="e.g. Apollo Pharmacy"
+                      required
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-text-primary text-xs font-bold mb-1 uppercase tracking-wider">License Number</label>
+                      <input
+                        type="text"
+                        name="licenseNumber"
+                        value={formData.licenseNumber}
+                        onChange={handleChange}
+                        className="w-full px-4 py-3 rounded-xl bg-bg-primary border border-border-color text-text-primary focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+                        placeholder="DL/2024/0001"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-text-primary text-xs font-bold mb-1 uppercase tracking-wider">Pincode</label>
+                      <input
+                        type="text"
+                        name="pincode"
+                        value={formData.pincode}
+                        onChange={handleChange}
+                        className="w-full px-4 py-3 rounded-xl bg-bg-primary border border-border-color text-text-primary focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+                        placeholder="400001"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-text-primary text-xs font-bold mb-1 uppercase tracking-wider">Shop Address</label>
+                    <textarea
+                      name="address"
+                      value={formData.address}
+                      onChange={handleChange}
+                      rows="2"
+                      className="w-full px-4 py-3 rounded-xl bg-bg-primary border border-border-color text-text-primary focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
+                      placeholder="Full shop address..."
+                      required
+                    ></textarea>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
           )}
 
           <button

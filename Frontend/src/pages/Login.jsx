@@ -25,11 +25,11 @@ const Login = () => {
       const result = await login(formData.email, formData.password);
       if (result.success) {
         toast.success('Login successful!');
-        const account = demoAccounts.find((a) => a.email === formData.email);
+        const user = result.user;
         setTimeout(() => {
-          if (account.role === 'admin') {
+          if (user.role === 'admin') {
             navigate('/dashboard/admin');
-          } else if (account.role === 'chemist') {
+          } else if (user.role === 'chemist') {
             navigate('/dashboard/chemist');
           } else {
             navigate('/dashboard/user');
@@ -50,10 +50,11 @@ const Login = () => {
     const result = await login(email, account.password);
     if (result.success) {
       toast.success(`Logged in as ${account.name}!`);
+      const user = result.user;
       setTimeout(() => {
-        if (account.role === 'admin') {
+        if (user.role === 'admin') {
           navigate('/dashboard/admin');
-        } else if (account.role === 'chemist') {
+        } else if (user.role === 'chemist') {
           navigate('/dashboard/chemist');
         } else {
           navigate('/dashboard/user');

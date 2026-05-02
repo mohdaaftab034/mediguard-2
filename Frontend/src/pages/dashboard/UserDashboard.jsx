@@ -37,31 +37,58 @@ const UserDashboard = () => {
     setLoading(true);
     try {
       // Fetch scans, alerts, and popular medicines in parallel
-      const [scansRes, alertsRes, popularRes] = await Promise.all([
+      const results = await Promise.allSettled([
         api.get('/scan/history?limit=5'),
         api.get('/alerts/unread/count'),
         api.get('/medicines/popular')
       ]);
 
-      const scans = scansRes.data.data.scans;
-      setRecentScans(scans);
-      setPopularMedicines(popularRes.data.data);
-      
-      // Calculate stats from scans
-      const total = scansRes.data.data.total || scans.length;
-      const genuine = scans.filter(s => s.result === 'GENUINE' || s.result === 'LOOKS_PROFESSIONAL').length;
-      const suspicious = scans.filter(s => ['FAKE', 'SUSPICIOUS', 'HAS_ISSUES'].includes(s.result)).length;
+      const [scansRes, alertsRes, popularRes] = results;
 
-      setStats({
-        totalScans: total,
-        genuineScans: genuine,
-        suspiciousScans: suspicious,
-        unreadAlerts: alertsRes.data.data.count || 0
-      });
+      // Handle Scans
+      if (scansRes.status === 'fulfilled') {
+        const scans = scansRes.value.data.data.scans || [];
+        setRecentScans(scans);
+        
+        const total = scansRes.value.data.data.total || scans.length;
+        const genuine = scans.filter(s => s.result === 'GENUINE' || s.result === 'LOOKS_PROFESSIONAL').length;
+        const suspicious = scans.filter(s => ['FAKE', 'SUSPICIOUS', 'HAS_ISSUES'].includes(s.result)).length;
+
+        setStats(prev => ({
+          ...prev,
+          totalScans: total,
+          genuineScans: genuine,
+          suspiciousScans: suspicious
+        }));
+      } else {
+        console.error('Failed to fetch scan history:', scansRes.reason);
+      }
+
+      // Handle Alerts
+      if (alertsRes.status === 'fulfilled') {
+        setStats(prev => ({
+          ...prev,
+          unreadAlerts: alertsRes.value.data.data.count || 0
+        }));
+      } else {
+        console.error('Failed to fetch unread alerts:', alertsRes.reason);
+      }
+
+      // Handle Popular Medicines
+      if (popularRes.status === 'fulfilled') {
+        setPopularMedicines(popularRes.value.data.data || []);
+      } else {
+        console.error('Failed to fetch popular medicines:', popularRes.reason);
+      }
+
+      // Only show error if EVERYTHING failed
+      if (results.every(r => r.status === 'rejected')) {
+        toast.error('Failed to load dashboard statistics');
+      }
 
     } catch (error) {
       console.error('Failed to fetch dashboard data:', error);
-      toast.error('Failed to load dashboard statistics');
+      toast.error('Dashboard connection error');
     } finally {
       setLoading(false);
     }

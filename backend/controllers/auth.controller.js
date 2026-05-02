@@ -19,44 +19,76 @@ const generateTokens = (userId) => {
 
 export const register = asyncHandler(async (req, res, next) => {
   const { name, email, password, phone, role, city, state } = req.body
+  console.log(`Registration attempt for: ${email}, role: ${role}`)
 
-  const existingUser = await User.findOne({ email })
+  const normalizedEmail = email?.toLowerCase().trim()
+  if (!normalizedEmail) {
+    return next(new ApiError(400, 'Email is required'))
+  }
+
+  const existingUser = await User.findOne({ email: normalizedEmail })
   if (existingUser) {
     return next(new ApiError(400, 'Email already in use'))
   }
 
-  const salt = await bcrypt.genSalt(10)
-  const hashedPassword = await bcrypt.hash(password, salt)
-
-  const user = await User.create({
-    name, email, password: hashedPassword, phone, role, city, state
+  // Create user instance without saving yet to get the ID
+  const user = new User({
+    name, 
+    email: normalizedEmail, 
+    password, 
+    phone, 
+    role, 
+    city, 
+    state
   })
 
+  // Generate tokens using the new user ID
+  const { accessToken, refreshToken } = generateTokens(user._id)
+  user.refreshToken = refreshToken
+
+  // Save user (triggers the pre-save hook for password hashing)
+  await user.save()
+  console.log(`User created successfully: ${user._id}`)
+
+  let chemist = null
   if (role === 'chemist') {
     const { shopName, licenseNumber, address, pincode } = req.body
-    await Chemist.create({
-      user: user._id, shopName, licenseNumber, address, city, state, pincode, phone
+    chemist = await Chemist.create({
+      user: user._id, 
+      shopName: shopName || `${name}'s Pharmacy`,
+      licenseNumber, 
+      address: address || 'Not provided', 
+      city: city || user.city, 
+      state: state || user.state, 
+      pincode: pincode || '000000', 
+      phone: phone || user.phone
     })
+    console.log(`Chemist profile created for user: ${user._id}`)
   }
 
-  const { accessToken, refreshToken } = generateTokens(user._id)
-  
-  user.refreshToken = refreshToken
-  await user.save({ validateBeforeSave: false })
+  // Handle email sending asynchronously
+  sendWelcomeEmail(user).catch(err => console.error('Delayed welcome email error:', err.message))
 
-  sendWelcomeEmail(user)
-
-  const userObj = user.toObject()
-  delete userObj.password
-
-  res.status(201).json(new ApiResponse(201, { user: userObj, accessToken, refreshToken }, 'User registered successfully'))
+  res.status(201).json(new ApiResponse(201, { user, chemist, accessToken, refreshToken }, 'User registered successfully'))
 })
 
 export const login = asyncHandler(async (req, res, next) => {
   const { email, password } = req.body
+  console.log(`Login attempt for: ${email}`)
 
-  const user = await User.findOne({ email })
-  if (!user || !(await bcrypt.compare(password, user.password))) {
+  if (!email || !password) {
+    return next(new ApiError(400, 'Email and password are required'))
+  }
+
+  const normalizedEmail = email.toLowerCase().trim()
+  const user = await User.findOne({ email: normalizedEmail })
+  
+  if (!user) {
+    return next(new ApiError(401, 'Invalid email or password'))
+  }
+
+  const isPasswordCorrect = await user.comparePassword(password)
+  if (!isPasswordCorrect) {
     return next(new ApiError(401, 'Invalid email or password'))
   }
 
@@ -70,10 +102,12 @@ export const login = asyncHandler(async (req, res, next) => {
   user.lastLogin = new Date()
   await user.save({ validateBeforeSave: false })
 
-  const userObj = user.toObject()
-  delete userObj.password
+  let chemist = null
+  if (user.role === 'chemist') {
+    chemist = await Chemist.findOne({ user: user._id })
+  }
 
-  res.status(200).json(new ApiResponse(200, { user: userObj, accessToken, refreshToken }, 'Login successful'))
+  res.status(200).json(new ApiResponse(200, { user, chemist, accessToken, refreshToken }, 'Login successful'))
 })
 
 export const logout = asyncHandler(async (req, res, next) => {
@@ -116,7 +150,16 @@ export const updateProfile = asyncHandler(async (req, res, next) => {
     { new: true, runValidators: true }
   ).select('-password -refreshToken')
 
-  res.status(200).json(new ApiResponse(200, user, 'Profile updated successfully'))
+  let chemist = null
+  if (user.role === 'chemist') {
+    chemist = await Chemist.findOneAndUpdate(
+      { user: user._id },
+      { phone, city, state, ...req.body.chemistData },
+      { new: true }
+    )
+  }
+
+  res.status(200).json(new ApiResponse(200, { user, chemist }, 'Profile updated successfully'))
 })
 
 export const changePassword = asyncHandler(async (req, res, next) => {
@@ -124,12 +167,11 @@ export const changePassword = asyncHandler(async (req, res, next) => {
   
   const user = await User.findById(req.user._id)
   
-  if (!(await bcrypt.compare(oldPassword, user.password))) {
+  if (!(await user.comparePassword(oldPassword))) {
     return next(new ApiError(400, 'Incorrect old password'))
   }
   
-  const salt = await bcrypt.genSalt(10)
-  user.password = await bcrypt.hash(newPassword, salt)
+  user.password = newPassword
   await user.save()
   
   res.status(200).json(new ApiResponse(200, null, 'Password changed successfully'))
