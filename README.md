@@ -12,11 +12,26 @@
 
 ---
 
-## ⚙️ System Architecture & Workflows
+## ⚙️ How It Works (System Architecture & Workflows)
 
-### 1. The Verification Workflow (Neural Vision Scan)
-This flow describes what happens when a user scans a medicine strip.
+### 1. High-Level Architecture
+This diagram illustrates the overall system interactions between the client, backend, and external services.
 
+```mermaid
+graph TD
+    A[Client UI - React/Vite] -->|HTTPS Requests| B[Backend Server - Node/Express]
+    B -->|Mongoose ODM| C[(MongoDB Database)]
+    B -->|API Calls| D[Groq Vision AI]
+    B -->|API/Scraping| E[CDSCO/Govt Registries]
+    
+    subgraph Data Flow
+        C
+        D
+        E
+    end
+```
+
+### 2. The Verification Workflow (Neural Vision Scan)
 ```mermaid
 sequenceDiagram
     participant User
@@ -26,105 +41,65 @@ sequenceDiagram
     participant DB (MongoDB)
 
     User->>Frontend: Uploads Medicine Image
-    Frontend->>Backend: POST /api/v1/scan/analyze (Multipart FormData)
-    Backend->>Groq Vision AI: Forward Image & Prompt (llama-3.2-11b-vision-preview)
-    Groq Vision AI-->>Backend: Return JSON Analysis (Name, Batch, Authenticity)
+    Frontend->>Backend: POST /api/v1/scan/analyze
+    Backend->>Groq Vision AI: Forward Image & Context
+    Groq Vision AI-->>Backend: Return JSON Analysis (Name, Batch, Risk Level)
     Backend->>DB: Check Batch against Global Registry
     DB-->>Backend: Return Batch Status (Valid/Recalled/Fake)
     Backend->>DB: Save Scan Record
-    Backend-->>Frontend: Return Scan Results & Authenticity Score
-    Frontend-->>User: Display Green/Yellow/Red Verification Status
-```
-
-### 2. User & Chemist Registration Flow
-Pharmacies (Chemists) undergo a strict verification process before they are visible on the public map.
-
-```mermaid
-flowchart TD
-    A[Registration Screen] --> B{Select Role}
-    B -->|User| C[Create Normal User Account]
-    B -->|Chemist| D[Input Pharmacy Details & License]
-    C --> E[Dashboard (User)]
-    D --> F[Status: PENDING]
-    F --> G(Admin Review / Auto-Verify against Govt Registry)
-    G -->|Approved| H[Status: VERIFIED]
-    G -->|Rejected| I[Status: BLACKLISTED]
-    H --> J[Visible on 'Nearby Chemists' Map]
-    I --> K[Removed from Map / Alerts Triggered]
-```
-
-### 3. Reporting & Alert System
-If a counterfeit drug is detected, the system automatically creates a case.
-
-```mermaid
-stateDiagram-v2
-    [*] --> CounterfeitDetected
-    CounterfeitDetected --> CreateReport
-    CreateReport --> NotifyUser: Warn Consumer
-    CreateReport --> FlagPharmacy: Red-Flag Seller
-    FlagPharmacy --> NotifyCDSCO: Forward to Regulatory Body
-    NotifyCDSCO --> [*]
+    Backend-->>Frontend: Return Scan Results & Verification Status
+    Frontend-->>User: Display Results
 ```
 
 ---
 
-## 💻 Tech Stack
-### Frontend
-- **React 18** (Vite)
-- **TailwindCSS** (for styling)
-- **Framer Motion** & **React Three Fiber** (for premium 3D UI, Antigravity background)
-- **React Leaflet** (for Pharmacy mapping)
+## 🗄️ Database Structure & Models
 
-### Backend
-- **Node.js** & **Express.js**
-- **MongoDB** (Mongoose)
-- **Groq API** (Llama 3.2 Vision)
-- **JWT Authentication**
+The system is built on **MongoDB**, structured around three primary collections: `Users`, `Scans`, and `Chemists`.
+
+### 1. User Model
+Manages authentication and profiles.
+- **Fields**: `name`, `email`, `password` (hashed), `role` (public, chemist, admin), `isVerified`.
+
+### 2. Scan Model
+Stores the result of every neural vision scan operation.
+- **Fields**: 
+  - `user` (Reference to User)
+  - `imageUrl` (Cloudinary URL)
+  - `result` (Enum: GENUINE, FAKE, SUSPICIOUS)
+  - `confidence` (0-100 score)
+  - `medicineDetails` (Sub-document: Name, MRP, Batch Number)
+  - `riskLevel` (LOW, MEDIUM, HIGH, CRITICAL)
+- **Indexes**: Indexed by `user` and `createdAt` for fast historical lookups.
+
+### 3. Chemist Model
+Manages verified pharmacy records.
+- **Fields**: `shopName`, `licenseNumber`, `location` (GeoJSON Point), `verificationStatus`.
+- **Geospatial Queries**: Uses MongoDB `2dsphere` index to locate nearby chemists based on user coordinate radius.
+
+---
+
+## ❓ Frequently Asked Questions (Q&A)
+
+**Q1: How does the AI determine if a medicine is fake?**
+A: MediGuard uses Groq's Vision AI (`llama-3.2-11b-vision-preview`). The AI acts as a forensics expert, visually inspecting typography, hologram integrity, spelling errors, and color shifts on the packaging, cross-referencing against standard formatting.
+
+**Q2: How are nearby verified chemists found?**
+A: When a user performs a scan or requests chemists, their geolocation coordinates are sent to the backend. MongoDB's `$nearSphere` geospatial query instantly returns chemists within a defined radius (e.g., 2km) who have a verified status.
+
+**Q3: What happens when a "CRITICAL" fake is detected?**
+A: The system automatically generates a "Report" object. It alerts the user immediately and can trigger automated webhooks directly to the CDSCO (Central Drugs Standard Control Organisation) or local health authorities.
 
 ---
 
 ## 🚀 Getting Started
 
-### Prerequisites
-- Node.js (v18+)
-- MongoDB instance (Local or Atlas)
-- Groq API Key
-
-### Installation
-
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/your-repo/mediguard.git
-   cd mediguard
-   ```
-
-2. **Setup Backend**
-   ```bash
-   cd backend
-   npm install
-   # Create a .env file and add:
-   # PORT=5000
-   # MONGODB_URI=your_mongo_url
-   # JWT_SECRET=your_secret
-   # GROQ_API_KEY=your_key
-   npm run dev
-   ```
-
-3. **Setup Frontend**
-   ```bash
-   cd ../Frontend
-   npm install
-   # Create a .env file and add:
-   # VITE_API_BASE_URL=http://localhost:5000/api/v1
-   npm run dev
-   ```
-
-4. **Access the App**
-   Open your browser and navigate to `http://localhost:5173`.
+1. **Clone the repository**: `git clone <repo_url>`
+2. **Setup Backend**: Navigate to `backend/`, run `npm install`, add `.env` keys (`MONGODB_URI`, `JWT_SECRET`, `GROQ_API_KEY`), and start with `npm run dev`.
+3. **Setup Frontend**: Navigate to `Frontend/`, run `npm install`, setup `.env` (`VITE_API_BASE_URL`), and start with `npm run dev`.
 
 ---
 
-## 📁 Repository Structure
-Please refer to the detailed READMEs in the subdirectories:
-- [`/backend/README.md`](./backend/README.md) - For detailed API specifications and backend architecture.
-- [`/Frontend/README.md`](./Frontend/README.md) - For React component hierarchy and UI architecture.
+## 📁 Repository Documentation
+- [`/backend/README.md`](./backend/README.md) - Contains full API endpoints, JSON request/response formats.
+- [`/Frontend/README.md`](./Frontend/README.md) - Explains how the React client connects to APIs with complete code examples.

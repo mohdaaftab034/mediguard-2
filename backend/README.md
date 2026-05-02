@@ -1,162 +1,158 @@
-# MediGuard Backend Architecture & API Reference
+# MediGuard Backend Documentation
 
-This directory contains the Express.js / Node.js backend for the MediGuard application. It powers the core AI-vision medicine verification, handles authentication, and manages the global supply chain database of pharmacies and drug batches.
+The backend system powers the core logic of MediGuard, providing RESTful endpoints, integrating with Groq Vision AI for image analysis, and managing data via MongoDB.
 
-## Tech Stack
-- **Framework**: Express.js (Node.js)
-- **Database**: MongoDB with Mongoose
-- **Authentication**: JWT (JSON Web Tokens), bcrypt for password hashing
-- **File Uploads**: Multer & Cloudinary
-- **AI Integration**: Groq API (Vision Models) for neural-vision drug verification
-- **Location Services**: GeoJSON for spatial queries (finding nearby pharmacies)
+---
 
-## Base API Response Format
-All APIs return a standardized JSON structure based on the `ApiResponse` class:
-```json
-{
-  "statusCode": 200,
-  "data": { ... },
-  "message": "Success message",
-  "success": true
-}
+## 🏗️ System Architecture
+
+```mermaid
+graph TD
+    A[Express App / Router] --> B(Controllers)
+    B --> C[Scan Controller]
+    B --> D[Auth Controller]
+    B --> E[Chemist Controller]
+    B --> F[Report/Admin Controller]
+    
+    C --> G(Services)
+    G --> H[Groq Vision Analysis]
+    G --> I[CDSCO API Integration]
+    
+    B --> J(MongoDB Models)
+    J --> K[User Model]
+    J --> L[Scan Result Model]
+    J --> M[Chemist Model]
+    J --> N[Report Model]
 ```
 
 ---
 
-## 1. Authentication API (`/api/v1/auth`)
+## 📚 API Documentation
 
-### `POST /register`
-Registers a new user or chemist.
-- **Body**: `{ name, email, password, role, phone, ...chemistDetails }`
-- **Response**:
+### 1. Authentication Endpoints
+
+#### User Registration
+- **Endpoint**: `POST /api/v1/auth/register`
+- **Description**: Registers a new user.
+- **Request Body (JSON)**:
   ```json
   {
-    "statusCode": 201,
-    "data": {
-      "user": { "_id": "...", "name": "John", "email": "john@test.com", "role": "user" },
-      "chemist": null,
-      "accessToken": "ey...",
-      "refreshToken": "ey..."
+    "name": "John Doe",
+    "email": "john@example.com",
+    "password": "SecurePassword123",
+    "role": "public" 
+  }
+  ```
+- **Response (201 Created)**:
+  ```json
+  {
+    "success": true,
+    "user": {
+      "id": "64abcd123...",
+      "name": "John Doe",
+      "email": "john@example.com",
+      "role": "public"
     },
-    "message": "User registered successfully",
-    "success": true
+    "token": "eyJhbGciOiJIUzI1NiIsInR5..."
   }
   ```
 
-### `POST /login`
-Authenticates a user.
-- **Body**: `{ email, password }`
-- **Response**:
+#### User Login
+- **Endpoint**: `POST /api/v1/auth/login`
+- **Description**: Authenticates an existing user and returns a JWT.
+- **Request Body (JSON)**:
   ```json
   {
-    "statusCode": 200,
-    "data": {
-      "user": { "_id": "...", "name": "John", "email": "john@test.com", "role": "chemist" },
-      "chemist": { "pharmacyName": "MediLife", "licenseNumber": "12345" },
-      "accessToken": "ey...",
-      "refreshToken": "ey..."
-    },
-    "message": "Login successful",
-    "success": true
+    "email": "john@example.com",
+    "password": "SecurePassword123"
+  }
+  ```
+- **Response (200 OK)**:
+  ```json
+  {
+    "success": true,
+    "token": "eyJhbGci...",
+    "user": {
+      "id": "64abcd123...",
+      "name": "John Doe"
+    }
   }
   ```
 
----
+### 2. Scanning Endpoints
 
-## 2. Scan & Vision API (`/api/v1/scan`)
-
-### `POST /analyze`
-Analyzes an uploaded image of a medicine strip using Groq's Vision AI (`llama-3.2-11b-vision-preview`).
-- **Headers**: `Authorization: Bearer <token>`
-- **Body**: `multipart/form-data` with `image` file
-- **Response**:
+#### Analyze Medicine
+- **Endpoint**: `POST /api/v1/scan/analyze`
+- **Description**: Analyzes an uploaded image using Groq Vision.
+- **Headers**: `Content-Type: multipart/form-data`
+- **Request Body**:
+  - `medicineImage`: [File]
+- **Response (200 OK)**:
   ```json
   {
-    "statusCode": 200,
-    "data": {
-      "scanId": "abc123xyz",
-      "analysis": {
-        "medicineName": "Paracetamol 500mg",
-        "batchNumber": "B12345",
-        "expiryDate": "12/2026",
-        "authenticityScore": 98,
-        "isVerified": true,
-        "warnings": []
+    "success": true,
+    "scan": {
+      "id": "scan123",
+      "result": "GENUINE",
+      "confidence": 98,
+      "medicineDetails": {
+        "name": "Paracetamol",
+        "batchNumber": "AB1234"
       },
-      "imageUrl": "https://res.cloudinary.com/..."
-    },
-    "message": "Medicine verified successfully",
-    "success": true
+      "riskLevel": "LOW"
+    }
   }
   ```
 
----
+### 3. Chemist Verification Endpoints
 
-## 3. Batch Verification API (`/api/v1/batch`)
-
-### `GET /verify/:batchNumber`
-Checks a batch number against the central database to ensure it hasn't been recalled or marked as counterfeit.
-- **Response**:
+#### Find Nearby Chemists
+- **Endpoint**: `GET /api/v1/chemist/nearby`
+- **Description**: Retrieves verified chemists near a specific location.
+- **Query Parameters**: `lat=28.7041&lng=77.1025&radius=5`
+- **Response (200 OK)**:
   ```json
   {
-    "statusCode": 200,
-    "data": {
-      "batchNumber": "B12345",
-      "manufacturer": "PharmaCorp",
-      "manufacturingDate": "2023-01-01",
-      "expiryDate": "2025-01-01",
-      "status": "active",
-      "isAuthentic": true
-    },
-    "message": "Batch verified",
-    "success": true
-  }
-  ```
-
----
-
-## 4. Reports & CDSCO API (`/api/v1/reports`)
-
-### `POST /submit`
-Submits a counterfeit medicine report directly to regulatory bodies (CDSCO).
-- **Body**: `{ scanId, location, description, pharmacyId }`
-- **Response**:
-  ```json
-  {
-    "statusCode": 201,
-    "data": {
-      "caseId": "CASE-9876",
-      "reportId": "65ab34cd..."
-    },
-    "message": "Report submitted successfully",
-    "success": true
-  }
-  ```
-
----
-
-## 5. Chemist Network API (`/api/v1/chemist`)
-
-### `GET /nearby`
-Finds verified pharmacies within a specific radius using MongoDB GeoSpatial queries.
-- **Query**: `?lat=28.7041&lng=77.1025&radius=5` (radius in km)
-- **Response**:
-  ```json
-  {
-    "statusCode": 200,
-    "data": [
+    "success": true,
+    "chemists": [
       {
-        "pharmacyName": "City Meds",
-        "address": "New Delhi",
-        "verificationStatus": "verified",
-        "location": { "type": "Point", "coordinates": [77.1025, 28.7041] }
+        "id": "chem123",
+        "shopName": "Health Pharmacy",
+        "location": {
+          "coordinates": [77.1025, 28.7041]
+        },
+        "isVerified": true
       }
-    ],
-    "message": "Nearby chemists fetched",
-    "success": true
+    ]
   }
   ```
 
-## Security & Rate Limiting
-- **Global Rate Limiting**: Enabled on `/api/v1/auth` to prevent brute-force attacks.
-- **JWT Middleware**: Validates `accessToken` via `auth.middleware.js`. Extracts user ID and appends `req.user`.
+---
+
+## 🛠️ Setup & Execution
+
+### Installation
+1. Navigate to the backend directory:
+   ```bash
+   cd backend
+   ```
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+
+### Configuration
+Create a `.env` file in the root of the `backend` directory:
+```env
+PORT=5000
+MONGODB_URI=mongodb://localhost:27017/mediguard
+JWT_SECRET=your_jwt_secret_key
+GROQ_API_KEY=your_groq_api_key
+```
+
+### Running the Application
+Start the development server:
+```bash
+npm run dev
+```
+The API will be available at `http://localhost:5000`.

@@ -1,74 +1,159 @@
-# MediGuard Frontend Architecture
+# MediGuard Frontend
 
-This directory contains the React application for the MediGuard platform. It provides the user interface for the AI-Powered Fake Medicine Detector, featuring a premium glassmorphic design and real-time interactions.
+The frontend for MediGuard is built with React 18 (Vite) and TailwindCSS, providing a highly interactive, 3D-accelerated user experience focused on scanning, mapping, and user engagement.
 
-## Tech Stack
-- **Framework**: React 18 (bootstrapped with Vite)
-- **Styling**: TailwindCSS (with custom utilities for glassmorphism and animations)
-- **State Management**: React Context API (`AuthContext`, `ThemeContext`)
-- **Routing**: React Router DOM
-- **Animations**: Framer Motion & React Three Fiber (for 3D Antigravity backgrounds)
-- **Maps**: React Leaflet (for the Pharmacy Locator)
-- **HTTP Client**: Axios
+## 🏗️ Architecture & Component Flow
 
----
-
-## 🏗️ Folder Structure
-
-- `/src/components`: Reusable UI components (Navbar, Footer, `Antigravity.jsx`, Buttons).
-- `/src/pages`: Main route views (`Home.jsx`, `Scanner.jsx`, `Dashboard.jsx`, `Profile.jsx`).
-- `/src/context`: React Context providers for global state (Authentication, Theming).
-- `/src/services`: API interaction layers (Axios instances and fetch wrappers).
-- `/src/utils`: Helper functions, constants, and route definitions.
-
----
-
-## 🔌 API Integration
-
-The frontend communicates with the backend via a centralized Axios instance configured with interceptors.
-
-### 1. Authentication Flow (`AuthContext.jsx`)
-The frontend maintains session state using the `AuthContext`.
-- **Login**: Sends credentials to `POST /api/v1/auth/login`. On success, stores `accessToken` in memory/localStorage and populates the `user` state.
-- **Registration**: Sends profile data to `POST /api/v1/auth/register`. Automatically logs the user in upon success and redirects to the Home page.
-- **Persistence**: Upon page reload, the app attempts to fetch the current profile using `GET /api/v1/auth/profile` with the stored token.
-
-### 2. Neural Vision Scanner (`Scanner.jsx`)
-The core feature of the app.
-- **Upload**: User selects an image or takes a photo.
-- **Process**: Sends the image as `multipart/form-data` to `POST /api/v1/scan/analyze`.
-- **Response Handling**: The frontend parses the returned JSON containing `authenticityScore`, `medicineName`, and `batchNumber`.
-- **UI Update**: Dynamically renders a Green (Authentic), Yellow (Warning), or Red (Fake) status card based on the score.
-
-### 3. Chemist Map (`ChemistLocator.jsx`)
-Displays verified pharmacies on an interactive map.
-- **Fetch Data**: Calls `GET /api/v1/chemist/nearby` passing the user's current geolocation (lat/lng).
-- **Render**: Uses `react-leaflet` to plot markers for each pharmacy. Pharmacies with a `verificationStatus` of `verified` are shown with a green badge.
+```mermaid
+graph TD
+    A[App.tsx / Routing] --> B(Pages)
+    B --> C[Home]
+    B --> D[Scanner Module]
+    B --> E[Chemist Locator Map]
+    B --> F[User/Admin Dashboard]
+    
+    C --> G(Shared UI Components)
+    D --> G
+    
+    G --> H[Upload Zone / Camera Capture]
+    G --> I[Verification Results Display]
+    G --> J[3D Models / Framer Motion Elements]
+    
+    D --> K[API Integration]
+    E --> K
+```
 
 ---
 
-## 🎨 UI & Design Principles
+## 🔌 Connecting APIs to the Frontend
 
-The application employs a "Premium Glassmorphism" design language:
-- **Depth**: Elements use `backdrop-blur-xl` and `backdrop-blur-2xl` to create frosted glass effects.
-- **Dynamic Backgrounds**: The `Home.jsx` page features an interactive 3D particle system (`<Antigravity />`) that responds to mouse movement, creating an immersive "field" effect.
-- **Dark/Light Mode**: Full support for theme switching via `ThemeContext`, dynamically adjusting gradients, border opacities, and shadow strengths.
+MediGuard uses standard REST conventions combined with Axios and React Hooks to efficiently handle API communication and state management.
 
-## 🚀 Running Locally
+### 1. Axios Configuration
+Create an Axios instance to centralize configuration, such as setting the base URL and adding auth headers.
 
-1. Install dependencies:
+```javascript
+// src/api/axios.js
+import axios from 'axios';
+
+const api = axios.create({
+  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api/v1',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// Add an interceptor to inject the JWT token
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+export default api;
+```
+
+### 2. Creating API Service Layers
+Group related endpoints together in a service file.
+
+```javascript
+// src/services/reportService.js
+import api from '../api/axios';
+
+export const submitReport = async (reportData) => {
+  const response = await api.post('/report/submit', reportData);
+  return response.data;
+};
+
+export const getReportHistory = async () => {
+  const response = await api.get('/report/history');
+  return response.data;
+};
+```
+
+### 3. Using React Hooks for State Management
+Custom hooks allow components to trigger API calls while automatically tracking loading and error states.
+
+```javascript
+// src/hooks/useReport.js
+import { useState, useCallback } from 'react';
+import { submitReport } from '../services/reportService';
+
+export const useReport = () => {
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(false);
+
+  const submitFakeReport = useCallback(async (reportData) => {
+    setSubmitting(true);
+    setError(null);
+    try {
+      const response = await submitReport(reportData);
+      setSuccess(true);
+      return response;
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to submit report.');
+    } finally {
+      setSubmitting(false);
+    }
+  }, []);
+
+  return { submitting, error, success, submitFakeReport };
+};
+```
+
+### 4. Implementation in Components
+Finally, consume the custom hook inside a functional component.
+
+```javascript
+// src/components/ReportForm.jsx
+import React from 'react';
+import { useReport } from '../hooks/useReport';
+
+const ReportForm = () => {
+  const { submitting, error, success, submitFakeReport } = useReport();
+
+  const handleReport = async () => {
+    await submitFakeReport({ reason: "Counterfeit visual anomalies" });
+  };
+
+  if (success) return <p>Report submitted successfully!</p>;
+  if (error) return <p className="text-red-500">{error}</p>;
+
+  return (
+    <button onClick={handleReport} disabled={submitting}>
+      {submitting ? 'Submitting...' : 'Submit Report'}
+    </button>
+  );
+};
+
+export default ReportForm;
+```
+
+---
+
+## 🛠️ Setup & Execution
+
+### Installation
+1. Navigate to the Frontend directory:
+   ```bash
+   cd Frontend
+   ```
+2. Install dependencies:
    ```bash
    npm install
    ```
 
-2. Configure environment:
-   Create a `.env` file in the `Frontend` directory:
-   ```env
-   VITE_API_BASE_URL=http://localhost:5000/api/v1
-   ```
+### Configuration
+Create a `.env` file in the root of the `Frontend` directory with the following variables:
+```env
+VITE_API_BASE_URL=http://localhost:5000/api/v1
+```
 
-3. Start the development server:
-   ```bash
-   npm run dev
-   ```
-   The app will be available at `http://localhost:5173`.
+### Running the Application
+Start the Vite development server:
+```bash
+npm run dev
+```
